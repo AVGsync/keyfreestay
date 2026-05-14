@@ -3,7 +3,7 @@ CREATE TYPE housing_status AS ENUM ('draft', 'published', 'unpublished');
 CREATE TYPE cancellation_policy AS ENUM ('flexible', 'moderate', 'strict');
 
 CREATE TABLE housing (
-    id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id              UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     housing_type         housing_type NOT NULL DEFAULT 'apartment',
     status               housing_status NOT NULL DEFAULT 'draft',

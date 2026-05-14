@@ -6,6 +6,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// User struct
 type User struct {
 	ID                  string     `json:"id"`
 	FullName            string     `json:"full_name"`
@@ -27,11 +28,30 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-type SaleDetail struct {
-	SoldAt      time.Time `json:"sold_at" example:"2026-04-29T00:00:00Z"`
-	ProductName string    `json:"product_name" example:"iPhone 15"`
-	Category    string    `json:"category" example:"Смартфоны"`
-	Quantity    int       `json:"quantity" example:"4"`
-	Revenue     float64   `json:"revenue" example:"399996.00"`
+// Housing struct
+type HousingResponse struct {
+    ID                  string         `json:"id"`
+    UserID              string         `json:"user_id"`
+    HousingType         string         `json:"housing_type"`
+    Status              string         `json:"status"`
+    Title               *string        `json:"title,omitempty"`
+    Description         *string        `json:"description,omitempty"`
+    Address             *string        `json:"address,omitempty"`
+    Latitude            *float64       `json:"latitude,omitempty"`
+    Longitude           *float64       `json:"longitude,omitempty"`
+    PricePerNight       *float64       `json:"price_per_night,omitempty"`
+    MaxGuests           *int           `json:"max_guests,omitempty"`
+    Amenities           []string       `json:"amenities"`
+    CancellationPolicy  string         `json:"cancellation_policy"`
+    RatingAvg           *float64       `json:"rating_avg,omitempty"`
+    RatingCount         int            `json:"rating_count"`
+    Images              []HousingImage `json:"images"`
+    CreatedAt           time.Time      `json:"created_at"`
+    UpdatedAt           time.Time      `json:"updated_at"`
 }
 
+type HousingImage struct {
+    ID       string `json:"id"`
+    URL      string `json:"url"`       
+    Position int    `json:"position"`
+}

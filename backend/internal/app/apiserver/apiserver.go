@@ -13,6 +13,7 @@ import (
 	"github.com/AVGsync/keyfreestay/backend/internal/service"
 	"github.com/AVGsync/keyfreestay/backend/internal/transport/http/handler"
 	"github.com/AVGsync/keyfreestay/backend/internal/transport/http/middleware"
+	"github.com/AVGsync/keyfreestay/backend/internal/repository/minio"
 
 	"github.com/go-chi/chi/v5"
 	httpSwagger "github.com/swaggo/http-swagger"
@@ -23,6 +24,7 @@ type APIServer struct {
 	logger *slog.Logger
 	router *chi.Mux
 	db     *postgres.DB
+	s3     *minio.S3
 }
 
 func New(config *Config) (*APIServer, error) {
@@ -41,6 +43,10 @@ func New(config *Config) (*APIServer, error) {
 func (s *APIServer) Start() error {
 	if err := s.configureDB(); err != nil {
 		return fmt.Errorf("apiserver: configure database: %w", err)
+	}
+
+	if err := s.configureS3(); err != nil {
+		return fmt.Errorf("apiserver: configure s3: %w", err)
 	}
 
 	s.configureRouter()
@@ -82,15 +88,34 @@ func (s *APIServer) configureDB() error {
 	return nil
 }
 
+func (s *APIServer) configureS3() error {
+    s3, err := minio.New(
+        s.config.EndPoint,
+        s.config.PublicURL,
+        s.config.MinioAccessKey,
+        s.config.MinioSecretKey,
+        "housing",
+        s.config.UseSSL,
+    )
+    if err != nil {
+        return fmt.Errorf("init s3: %w", err)
+    }
+    s.s3 = s3
+    return nil
+}
+
 func (s *APIServer) configureRouter() {
 	hasher := security.NewHasher()
 	jwtManager := security.NewJWTManager(s.config.JWTSecret, time.Duration(s.config.TTLAccessToken)*time.Second)
 
 	userRepo := s.db.User()
+	housingRepo := s.db.Housing()
 
 	userService := service.NewUserService(userRepo, hasher, jwtManager)
+	housingService := service.NewHousingService(housingRepo, s.s3)
 
 	userHandler := handler.NewUserHandler(userService)
+	housingHandler := handler.NewHousingHandler(housingService)
 
 	middleware := middleware.NewMiddleware(jwtManager)
 
@@ -119,6 +144,11 @@ func (s *APIServer) configureRouter() {
 			r.Get("/me", userHandler.GetMe())
 			r.Patch("/me", userHandler.UpdateUser())
 
+			r.Get("/housing", housingHandler.GetHousingList())
+			r.Get("/housing/{id}", housingHandler.GetHousingByID())
+			r.Post("/housing", housingHandler.CreateHousing())
+			r.Patch("/housing", housingHandler.UpdateHousing())
+			
 		})
 	})
 }

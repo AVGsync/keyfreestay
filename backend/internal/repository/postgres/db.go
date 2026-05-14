@@ -38,3 +38,6 @@ func (d *DB) User() *UserRepository {
 	return &UserRepository{database: d}
 }
 
+func (d *DB) Housing() *HousingRepository {
+	return &HousingRepository{database: d}
+}

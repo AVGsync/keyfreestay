@@ -20,6 +20,11 @@ type Config struct {
 	PostgresHost     string `envconfig:"POSTGRES_HOST" default:"localhost"`
 	PostgresPort     string `envconfig:"POSTGRES_PORT" default:"5432"`
 	PostgresDB   string `envconfig:"POSTGRES_DB" default:"analysis"`
+	MinioAccessKey string `envconfig:"MINIO_ACCESS_KEY"`
+	MinioSecretKey string `envconfig:"MINIO_SECRET_KEY"`
+	PublicURL string `envconfig:"PUBLIC_URL"`
+	EndPoint string `envconfig:"ENDPOINT"`
+	UseSSL bool `envconfig:"USE_SSL"`
 }
 
 
