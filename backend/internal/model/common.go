@@ -57,3 +57,9 @@ type HousingImage struct {
     ImageURL   *string
 	Position   int
 }
+
+type ContactRequest struct {
+	Name  string `json:"name"  validate:"required,min=2,max=100"`
+	Email string `json:"email" validate:"required,email"`
+	Phone string `json:"phone" validate:"required,min=5,max=20"`
+}

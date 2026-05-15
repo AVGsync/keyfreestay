@@ -1,6 +1,7 @@
 package apiserver
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -9,11 +10,12 @@ import (
 
 	_ "github.com/AVGsync/keyfreestay/backend/docs"
 	"github.com/AVGsync/keyfreestay/backend/internal/infrastructure/security"
+	"github.com/AVGsync/keyfreestay/backend/internal/infrastructure/telegram"
+	"github.com/AVGsync/keyfreestay/backend/internal/repository/minio"
 	"github.com/AVGsync/keyfreestay/backend/internal/repository/postgres"
 	"github.com/AVGsync/keyfreestay/backend/internal/service"
 	"github.com/AVGsync/keyfreestay/backend/internal/transport/http/handler"
 	"github.com/AVGsync/keyfreestay/backend/internal/transport/http/middleware"
-	"github.com/AVGsync/keyfreestay/backend/internal/repository/minio"
 
 	"github.com/go-chi/chi/v5"
 	httpSwagger "github.com/swaggo/http-swagger"
@@ -25,6 +27,8 @@ type APIServer struct {
 	router *chi.Mux
 	db     *postgres.DB
 	s3     *minio.S3
+	tg 		 *telegram.Client
+	cancel context.CancelFunc
 }
 
 func New(config *Config) (*APIServer, error) {
@@ -48,6 +52,8 @@ func (s *APIServer) Start() error {
 	if err := s.configureS3(); err != nil {
 		return fmt.Errorf("apiserver: configure s3: %w", err)
 	}
+
+	s.configureTelegram()
 
 	s.configureRouter()
 
@@ -104,6 +110,10 @@ func (s *APIServer) configureS3() error {
     return nil
 }
 
+func (s *APIServer) configureTelegram() {
+	s.tg = telegram.NewClient(s.config.TgBotToken)
+}
+
 func (s *APIServer) configureRouter() {
 	hasher := security.NewHasher()
 	jwtManager := security.NewJWTManager(s.config.JWTSecret, time.Duration(s.config.TTLAccessToken)*time.Second)
@@ -125,6 +135,16 @@ func (s *APIServer) configureRouter() {
 
 	middleware := middleware.NewMiddleware(jwtManager)
 
+	// Telegram
+	subscriberRepo := s.db.TgSubscriber()
+	contactService := service.NewContactService(s.tg, subscriberRepo)
+	contactHandler := handler.NewContactHandler(contactService)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	s.cancel = cancel
+	poller := telegram.NewPoller(s.tg, subscriberRepo)
+	go poller.Run(ctx)
+
 	if s.config.Debug {
 		s.router.Get("/swagger", func(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/swagger/index.html", http.StatusMovedPermanently)
@@ -138,6 +158,9 @@ func (s *APIServer) configureRouter() {
 		r.Use(middleware.Trace)
 
 		r.Get("/ping", ping)
+
+		// Contact
+		r.Post("/contact", contactHandler.SendContactRequest())
 
 		r.Route("/auth", func(r chi.Router) {
 			r.Post("/register", userHandler.RegisterNewUser())

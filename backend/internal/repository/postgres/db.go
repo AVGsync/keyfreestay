@@ -49,3 +49,7 @@ func (d *DB) Booking() *BookingRepository {
 func (d *DB) PaymentMethod() *PaymentMethodRepository {
 	return &PaymentMethodRepository{database: d}
 }
+
+func (d *DB) TgSubscriber() *TgSubscriberRepository {
+	return &TgSubscriberRepository{database: d}
+}

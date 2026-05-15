@@ -25,6 +25,7 @@ type Config struct {
 	PublicURL string `envconfig:"PUBLIC_URL"`
 	EndPoint string `envconfig:"ENDPOINT"`
 	UseSSL bool `envconfig:"USE_SSL"`
+	TgBotToken string `envconfig:"TG_BOT_TOKEN"`
 }
 
 
