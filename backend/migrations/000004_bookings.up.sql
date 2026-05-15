@@ -9,7 +9,6 @@ CREATE TABLE bookings (
     check_out                DATE NOT NULL,
     guests_count             SMALLINT NOT NULL CHECK (guests_count > 0),
 
-    -- Снэпшоты на момент брони — чтобы чек не плыл при изменении цены жилья
     price_per_night_snapshot NUMERIC(10, 2) NOT NULL CHECK (price_per_night_snapshot > 0),
     service_fee              NUMERIC(10, 2) NOT NULL DEFAULT 0 CHECK (service_fee >= 0),
     total_price              NUMERIC(10, 2) NOT NULL CHECK (total_price >= 0),
@@ -21,7 +20,6 @@ CREATE TABLE bookings (
 
     CONSTRAINT bookings_dates_valid CHECK (check_out > check_in),
 
-    -- БД не даст пересечь активные брони на одно жильё
     CONSTRAINT bookings_no_overlap
         EXCLUDE USING gist (
             housing_id WITH =,

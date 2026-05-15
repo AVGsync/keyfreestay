@@ -15,7 +15,6 @@ CREATE TABLE payment_methods (
 
 CREATE INDEX payment_methods_user_id_idx ON payment_methods (user_id);
 
--- максимум одна дефолтная карта на пользователя
 CREATE UNIQUE INDEX payment_methods_one_default_per_user
     ON payment_methods (user_id)
     WHERE is_default = TRUE;

@@ -41,3 +41,11 @@ func (d *DB) User() *UserRepository {
 func (d *DB) Housing() *HousingRepository {
 	return &HousingRepository{database: d}
 }
+
+func (d *DB) Booking() *BookingRepository {
+	return &BookingRepository{database: d}
+}
+
+func (d *DB) PaymentMethod() *PaymentMethodRepository {
+	return &PaymentMethodRepository{database: d}
+}

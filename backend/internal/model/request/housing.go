@@ -1,6 +1,5 @@
 package request
 
-// POST /api/housing — может быть пустым, может содержать что-то из формы
 type CreateHousingRequest struct {
     HousingType *string `json:"housing_type,omitempty" validate:"omitempty,oneof=apartment house office" example:"apartment"`
     Title       *string `json:"title,omitempty" validate:"omitempty,min=3,max=200" example:"Современная квартира в центре"`
@@ -8,7 +7,6 @@ type CreateHousingRequest struct {
     Address     *string `json:"address,omitempty" validate:"omitempty,min=3,max=500" example:"Москва, ул. Тверская, 12"`
 }
 
-// PATCH /api/housing/{id} — все поля опциональны.
 type UpdateHousingRequest struct {
     HousingType        *string   `json:"housing_type,omitempty" validate:"omitempty,oneof=apartment house office"`
     Status             *string   `json:"status,omitempty" validate:"omitempty,oneof=draft published unpublished"`

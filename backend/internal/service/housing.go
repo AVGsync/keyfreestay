@@ -54,8 +54,19 @@ func (s *HousingService) CreateHousing(housing *request.CreateHousingRequest, ct
 
 func (s *HousingService) UpdateHousing(housing *request.UpdateHousingRequest, housingID string, ctx context.Context) error {
 	userID := ctx.Value("claims").(*model.Claims).UserID
+	h, err := s.repository.GetHousingByID(housingID, ctx)
+
+	if err != nil {
+		slog.Debug("Error get housing by id", "error", err)
+		return err
+	}
+
+	if h.UserID != userID {
+		slog.Debug("user is not owner of housing", "user_id", userID, "housing_id", housingID)
+		return fmt.Errorf("user is not owner of housing")
+	}
 	
-	err := s.repository.UpdateHousing(housing, housingID, userID, ctx)
+	err = s.repository.UpdateHousing(housing, housingID, userID, ctx)
 	if err != nil {
 		slog.Debug("Error update housing", "error", err)
 		return err

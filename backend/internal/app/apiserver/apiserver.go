@@ -110,12 +110,18 @@ func (s *APIServer) configureRouter() {
 
 	userRepo := s.db.User()
 	housingRepo := s.db.Housing()
+	bookingRepo := s.db.Booking()
+	paymentRepo := s.db.PaymentMethod()
 
 	userService := service.NewUserService(userRepo, hasher, jwtManager)
 	housingService := service.NewHousingService(housingRepo, s.s3)
+	bookingService := service.NewBookingService(bookingRepo)
+	paymentService := service.NewPaymentMethodService(paymentRepo)
 
 	userHandler := handler.NewUserHandler(userService)
 	housingHandler := handler.NewHousingHandler(housingService)
+	bookingHandler := handler.NewBookingHandler(bookingService)
+	paymentHandler := handler.NewPaymentMethodHandler(paymentService)
 
 	middleware := middleware.NewMiddleware(jwtManager)
 
@@ -140,19 +146,32 @@ func (s *APIServer) configureRouter() {
 
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.Auth)
-
+			
+			// User
 			r.Get("/me", userHandler.GetMe())
 			r.Patch("/me", userHandler.UpdateUser())
 
+			// Housing
 			r.Get("/housing", housingHandler.GetHousingList())
 			r.Get("/housing/{id}", housingHandler.GetHousingByID())
 			r.Post("/housing", housingHandler.CreateHousing())
 			r.Patch("/housing", housingHandler.UpdateHousing())
 			r.Delete("/housing", housingHandler.DeleteHousing())
-
+			
+			// Image housing
 			r.Post("/housing/{id}/images", housingHandler.UploadImage())
 			r.Delete("/housing/{id}/images", housingHandler.DeleteImage())
 			
+			// Booking
+			r.Get("/booking", bookingHandler.GetBookingList())
+			r.Get("/booking/{id}", bookingHandler.GetBookingByID())
+			r.Put("/booking/create", bookingHandler.CreateBooking())
+			r.Delete("/booking/{id}", bookingHandler.DeleteBooking()) 
+			
+			// Payment method
+			r.Get("/payments", paymentHandler.GetPaymentMethodList())
+			r.Put("/payments/create", paymentHandler.CreatePaymentMethod())
+			r.Delete("/payments/{id}", paymentHandler.DeletePaymentMethod())  
 		})
 	})
 }
