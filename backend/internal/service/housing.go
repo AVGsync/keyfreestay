@@ -2,12 +2,14 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 
 	"github.com/AVGsync/keyfreestay/backend/internal/model"
 	"github.com/AVGsync/keyfreestay/backend/internal/model/request"
 	"github.com/AVGsync/keyfreestay/backend/internal/model/response"
+	"github.com/google/uuid"
 )
 
 type HousingRepository interface {
@@ -16,6 +18,9 @@ type HousingRepository interface {
 	GetHousingByID(housingID string, ctx context.Context) (model.HousingResponse, error)
 	GetHousingListForUser(ctx context.Context) (response.HousingListResponse, error)
 	GetHousingListForOwner(userID string, ctx context.Context) (response.HousingListResponse, error)
+	DeleteHousing(housingID string, ctx context.Context) error
+	AddImage(ctx context.Context, housingID string, userID string, key string) (model.HousingImage, error)
+	DeleteImage(ctx context.Context, key string) error
 }
 
 type S3 interface {
@@ -60,8 +65,11 @@ func (s *HousingService) UpdateHousing(housing *request.UpdateHousingRequest, ho
 
 func (s *HousingService) GetHousingByID(housingID string, ctx context.Context) (model.HousingResponse, error) {
 	h, err := s.repository.GetHousingByID(housingID, ctx)
-  // Написать функцию для получения фото жилья по ID и добавить в модель ответа
-	// h.Images = s.getHousingImages(housingID, ctx)
+
+	for i := range h.Images {
+		url := s.s3.PublicURL(h.Images[i].StorageKey)
+		h.Images[i].ImageURL = &url
+	}
 
 	if err != nil {
 		slog.Debug("Error get housing by id", "error", err)
@@ -77,6 +85,14 @@ func (s *HousingService) GetHousingList(ctx context.Context) (response.HousingLi
 				slog.Debug("Error get housing list for user", "error", err)
 				return response.HousingListResponse{}, err
 			}
+
+			for i := range res.Items {
+				if res.Items[i].ThumbnailURL != nil {
+					url := s.s3.PublicURL(*res.Items[i].ThumbnailURL)
+					res.Items[i].ThumbnailURL = &url
+				}
+			}
+
 			return res, nil
 	}
 
@@ -87,4 +103,91 @@ func (s *HousingService) GetHousingList(ctx context.Context) (response.HousingLi
 		return response.HousingListResponse{}, err
 	}
 	return res, nil
+}
+
+func (s *HousingService) DeleteHousing(housingID string, ctx context.Context) error {
+	userID := ctx.Value("claims").(*model.Claims).UserID
+
+	house, err := s.repository.GetHousingByID(housingID, ctx)
+	if err != nil {
+		slog.Debug("get housing by id", "error", err)
+		return err
+	}
+
+	if house.UserID != userID {
+		slog.Debug("user is not owner of housing", "user_id", userID, "housing_id", housingID)
+		return fmt.Errorf("user is not owner of housing")
+	}
+
+	err = s.repository.DeleteHousing(housingID, ctx)
+	if err != nil {
+		slog.Debug("delete housing", "error", err)
+		return err
+	}
+
+	for _, img := range house.Images {
+		err = s.s3.Delete(ctx, img.StorageKey)
+		if err != nil {
+			slog.Debug("delete from s3", "error", err)
+			return err
+		}
+	}
+
+	return nil
+
+}
+
+func (s *HousingService) UploadImage(ctx context.Context, housingID string, reader io.Reader, size int64, contentType string) error {
+	userID := ctx.Value("claims").(*model.Claims).UserID
+
+	ext := ".jpg"
+	switch contentType {
+	case "image/png":
+		ext = ".png"
+	case "image/webp":
+		ext = ".webp"
+	}
+	key := fmt.Sprintf("/housing/%s/%s%s", housingID, uuid.NewString(), ext)
+
+	if err := s.s3.Upload(ctx, key, reader, size, contentType); err != nil {
+		slog.Debug("upload to s3", "error", err)
+		return err
+	}
+
+	_, err := s.repository.AddImage(ctx, housingID, userID, key)
+	if err != nil {
+		_ = s.s3.Delete(ctx, key)
+		slog.Debug("save image meta", "error", err)
+		return err
+	}
+
+	return nil
+}
+
+func (s *HousingService) DeleteImage(ctx context.Context, key string, housingID string) error {
+	userID := ctx.Value("claims").(*model.Claims).UserID
+
+	house, err := s.repository.GetHousingByID(housingID, ctx)
+	if err != nil {
+		slog.Debug("get housing by id", "error", err)
+		return err
+	}
+
+	if house.UserID != userID {
+		slog.Debug("user is not owner of housing", "user_id", userID, "housing_id", housingID)
+		return fmt.Errorf("user is not owner of housing")
+	}
+
+	err = s.s3.Delete(ctx, key)
+	if err != nil {
+		slog.Debug("delete from s3", "error", err)
+		return err
+	}
+
+	err = s.repository.DeleteImage(ctx, key)
+	if err != nil {
+		slog.Debug("delete image from repository", "error", err)
+		return err
+	}
+	return nil
 }

@@ -3,12 +3,14 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 
 	"github.com/AVGsync/keyfreestay/backend/internal/model"
 	"github.com/AVGsync/keyfreestay/backend/internal/model/request"
 	"github.com/AVGsync/keyfreestay/backend/internal/model/response"
+	"github.com/go-chi/chi/v5"
 )
 
 type HousingUseCase interface {
@@ -16,6 +18,9 @@ type HousingUseCase interface {
 	UpdateHousing(housing *request.UpdateHousingRequest, housingID string, ctx context.Context) error
 	GetHousingByID(housingID string, ctx context.Context) (model.HousingResponse, error)
 	GetHousingList(ctx context.Context) (response.HousingListResponse, error)
+	DeleteHousing(housingID string, ctx context.Context) error
+	UploadImage(ctx context.Context, housingID string, reader io.Reader, size int64, contentType string) error
+	DeleteImage(ctx context.Context, key string, housingID string) error
 }
 
 type HousingHandler struct {
@@ -27,6 +32,7 @@ func NewHousingHandler(useCase HousingUseCase) *HousingHandler {
 		useCase: useCase,
 	}
 }
+
 
 func (h *HousingHandler) CreateHousing() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -99,5 +105,99 @@ func (h *HousingHandler) GetHousingList() http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(housingList)
+	}
+}
+
+func (h *HousingHandler) DeleteHousing() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		housingID := r.URL.Query().Get("id")
+		if housingID == "" {
+			http.Error(w, "missing housing ID", http.StatusBadRequest)
+			return
+		}
+
+		if err := h.useCase.DeleteHousing(housingID, r.Context()); err != nil {
+			http.Error(w, "failed to delete housing", http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+const maxUploadSize = 30 << 40 
+
+func (h *HousingHandler) UploadImage() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		housingID := chi.URLParam(r, "id")
+		if housingID == "" {
+			http.Error(w, "missing housing ID", http.StatusBadRequest)
+			return
+		}
+
+		// общий лимит на все файлы суммарно
+		r.Body = http.MaxBytesReader(w, r.Body, 10*maxUploadSize+1024)
+		if err := r.ParseMultipartForm(10 * maxUploadSize); err != nil {
+			http.Error(w, "too large or bad multipart", http.StatusBadRequest)
+			return
+		}
+
+		files := r.MultipartForm.File["file"]
+		if len(files) == 0 {
+			http.Error(w, "file required", http.StatusBadRequest)
+			return
+		}
+
+		for _, fh := range files {
+			if fh.Size > maxUploadSize {
+				http.Error(w, "one of files too large", http.StatusBadRequest)
+				return
+			}
+
+			ct := fh.Header.Get("Content-Type")
+			if ct != "image/jpeg" && ct != "image/png" && ct != "image/webp" {
+				http.Error(w, "only jpeg/png/webp allowed", http.StatusBadRequest)
+				return
+			}
+
+			f, err := fh.Open()
+			if err != nil {
+				http.Error(w, "cannot read file", http.StatusInternalServerError)
+				return
+			}
+
+			err = h.useCase.UploadImage(r.Context(), housingID, f, fh.Size, ct)
+			f.Close()
+			if err != nil {
+				http.Error(w, "failed to upload image", http.StatusInternalServerError)
+				return
+			}
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+func (h *HousingHandler) DeleteImage() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		key := r.URL.Query().Get("key")
+		if key == "" {
+			http.Error(w, "missing image key", http.StatusBadRequest)
+			return
+		}
+
+		housingID := chi.URLParam(r, "id")
+		if housingID == "" {
+			http.Error(w, "missing housing ID", http.StatusBadRequest)
+			return
+		}
+
+		err := h.useCase.DeleteImage(r.Context(), key, housingID)
+		if err != nil {
+			http.Error(w, "failed to delete image", http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
 	}
 }

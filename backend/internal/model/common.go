@@ -51,7 +51,9 @@ type HousingResponse struct {
 }
 
 type HousingImage struct {
-    ID       string `json:"id"`
-    URL      string `json:"url"`       
-    Position int    `json:"position"`
+	ID         string
+	HousingID  string
+	StorageKey string
+    ImageURL   *string
+	Position   int
 }

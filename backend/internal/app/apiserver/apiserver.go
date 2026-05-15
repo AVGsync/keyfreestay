@@ -148,6 +148,10 @@ func (s *APIServer) configureRouter() {
 			r.Get("/housing/{id}", housingHandler.GetHousingByID())
 			r.Post("/housing", housingHandler.CreateHousing())
 			r.Patch("/housing", housingHandler.UpdateHousing())
+			r.Delete("/housing", housingHandler.DeleteHousing())
+
+			r.Post("/housing/{id}/images", housingHandler.UploadImage())
+			r.Delete("/housing/{id}/images", housingHandler.DeleteImage())
 			
 		})
 	})

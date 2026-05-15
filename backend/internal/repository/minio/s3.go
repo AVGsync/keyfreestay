@@ -12,7 +12,7 @@ import (
 type S3 struct {
 	client     *minio.Client
 	bucket     string
-	publicURL  string // base URL для браузера, напр. "http://localhost:9000"
+	publicURL  string 
 }
 
 func New(endpoint, publicURL, accessKey, secretKey, bucket string, useSSL bool) (*S3, error) {
@@ -62,7 +62,6 @@ func (s *S3) Upload(ctx context.Context, key string, reader io.Reader, size int6
 	return nil
 }
 
-// PublicURL строит вечную публичную ссылку. Сетевых вызовов нет.
 func (s *S3) PublicURL(key string) string {
 	return fmt.Sprintf("%s/%s/%s", s.publicURL, s.bucket, key)
 }
