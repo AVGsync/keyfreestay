@@ -4,16 +4,19 @@
     ],
     "swagger": "2.0",
     "info": {
-        "description": "REST API для Analysis Pro: авторизация, профиль пользователя, детализация продаж, прогнозы по товарам, рекомендации по закупкам и экспорт CSV/XML.\n\nСхема авторизации: вызовите `POST /auth/login`; API установит HttpOnly cookie `token`. Защищённые маршруты читают JWT только из cookie.\nSwagger UI доступен только при `DEBUG=true`: `/swagger`, JSON спецификация — `/swagger/doc.json`.",
-        "title": "API Analysis Pro",
-        "contact": {},
+        "description": "REST API сервиса KeyFreeStay для краткосрочной аренды жилья без ключей.\n\nAPI покрывает регистрацию и вход, профиль пользователя, объекты жилья, изображения жилья, бронирования, платёжные методы и публичную контактную заявку.\nСхема авторизации: вызовите `POST /auth/login`; API установит JWT в HttpOnly cookie `token`. Защищённые маршруты читают JWT из cookie.\nSwagger UI доступен только при `DEBUG=true`: `/swagger`, JSON спецификация — `/swagger/doc.json`.",
+        "title": "KeyFreeStay API",
+        "contact": {
+            "name": "KeyFreeStay API Support",
+            "email": "support@keyfreestay.local"
+        },
         "version": "1.0"
     },
     "basePath": "/api",
     "paths": {
         "/auth/login": {
             "post": {
-                "description": "Проверяет email и пароль пользователя.\nПри успехе устанавливает JWT в HttpOnly cookie с именем `token`.\nЗащищённые маршруты используют только cookie `token`.",
+                "description": "Проверяет email и пароль пользователя.\nПри успехе устанавливает JWT в HttpOnly cookie `token` на 24 часа.\nЗащищённые маршруты ожидают эту cookie в заголовке `Cookie`.",
                 "consumes": [
                     "application/json"
                 ],
@@ -26,18 +29,18 @@
                 "summary": "Войти в аккаунт",
                 "parameters": [
                     {
-                        "description": "Данные входа: email и пароль. Примеры значений указаны в схеме.",
+                        "description": "Email и пароль зарегистрированного пользователя",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/github_com_AVGsync_analysis-pro_backend_internal_model_request.LoginRequest"
+                            "$ref": "#/definitions/github_com_AVGsync_keyfreestay_backend_internal_model_request.LoginRequest"
                         }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Пустой ответ со статусом 200; JWT передан в Set-Cookie",
                         "schema": {
                             "type": "string"
                         },
@@ -49,13 +52,13 @@
                         }
                     },
                     "400": {
-                        "description": "Некорректное тело запроса",
+                        "description": "invalid request body — тело запроса не JSON или структура не совпадает со схемой",
                         "schema": {
                             "type": "string"
                         }
                     },
                     "401": {
-                        "description": "Неверный email или пароль",
+                        "description": "invalid email or password — неверный email или пароль",
                         "schema": {
                             "type": "string"
                         }
@@ -65,7 +68,7 @@
         },
         "/auth/register": {
             "post": {
-                "description": "Создаёт аккаунт по полному имени, email и паролю.\nEmail должен быть уникальным. Пароль хранится в виде хеша и никогда не возвращается в ответе.\nПри успехе возвращает профиль созданного пользователя без токена; после регистрации вызовите /auth/login.",
+                "description": "Создаёт аккаунт гостя по полному имени, email, телефону и паролю.\nEmail должен быть уникальным без учёта регистра. Пароль хешируется и никогда не возвращается в ответе.\nНовый пользователь получает роль `user` и тариф `free`. После регистрации нужно вызвать /auth/login, чтобы получить cookie `token`.",
                 "consumes": [
                     "application/json"
                 ],
@@ -78,12 +81,12 @@
                 "summary": "Зарегистрировать нового пользователя",
                 "parameters": [
                     {
-                        "description": "Данные регистрации: полное имя, email и пароль. Примеры значений указаны в схеме.",
+                        "description": "Данные регистрации пользователя",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/github_com_AVGsync_analysis-pro_backend_internal_model_request.NewUserRequest"
+                            "$ref": "#/definitions/github_com_AVGsync_keyfreestay_backend_internal_model_request.NewUserRequest"
                         }
                     }
                 ],
@@ -91,17 +94,645 @@
                     "200": {
                         "description": "Профиль созданного пользователя",
                         "schema": {
-                            "$ref": "#/definitions/github_com_AVGsync_analysis-pro_backend_internal_model_response.UserResponse"
+                            "$ref": "#/definitions/github_com_AVGsync_keyfreestay_backend_internal_model_response.UserResponse"
                         }
                     },
                     "400": {
-                        "description": "Некорректное тело запроса",
+                        "description": "invalid request body — тело запроса не JSON или структура не совпадает со схемой",
                         "schema": {
                             "type": "string"
                         }
                     },
                     "500": {
-                        "description": "Не удалось зарегистрировать пользователя",
+                        "description": "failed to register new user — пользователь не создан",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/booking": {
+            "get": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "description": "Возвращает все бронирования текущего пользователя, отсортированные по дате заезда от новых к старым.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Бронирования"
+                ],
+                "summary": "Получить список бронирований",
+                "responses": {
+                    "200": {
+                        "description": "Список бронирований пользователя",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_AVGsync_keyfreestay_backend_internal_model_response.BookingListResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "unauthorized — cookie `token` отсутствует, просрочена или недействительна",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "failed to get booking list — список не получен",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/booking/create": {
+            "put": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "description": "Создаёт бронирование опубликованного объекта жилья для текущего пользователя.\nОбъект должен быть опубликован, вместимость должна быть не меньше `guests_count`, даты не должны пересекаться с активными бронированиями.\nСтоимость рассчитывается сервером: цена за ночь на момент бронирования * количество ночей + сервисный сбор.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Бронирования"
+                ],
+                "summary": "Создать бронирование",
+                "parameters": [
+                    {
+                        "description": "Данные бронирования",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_AVGsync_keyfreestay_backend_internal_model_request.CreateBookingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Созданное бронирование",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_AVGsync_keyfreestay_backend_internal_model_response.BookingResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "invalid request body — тело запроса не JSON или структура не совпадает со схемой",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "unauthorized — cookie `token` отсутствует, просрочена или недействительна",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "failed to create booking — объект не найден, не опубликован, занят, не подходит по гостям или БД отклонила запрос",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/booking/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "description": "Возвращает бронирование текущего пользователя.\nПользователь может получить только своё бронирование.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Бронирования"
+                ],
+                "summary": "Получить бронирование по ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "550e8400-e29b-41d4-a716-446655440000",
+                        "description": "UUID бронирования",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Детали бронирования",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_AVGsync_keyfreestay_backend_internal_model_response.BookingResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "missing booking ID — id не передан в path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "unauthorized — cookie `token` отсутствует, просрочена или недействительна",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "failed to get booking — бронирование не найдено или не принадлежит пользователю",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "description": "Удаляет бронирование текущего пользователя по ID.\nПользователь может удалить только своё бронирование.",
+                "produces": [
+                    "text/plain"
+                ],
+                "tags": [
+                    "Бронирования"
+                ],
+                "summary": "Удалить бронирование",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "550e8400-e29b-41d4-a716-446655440000",
+                        "description": "UUID бронирования",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Пустой ответ со статусом 200",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "missing booking ID — id не передан в path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "unauthorized — cookie `token` отсутствует, просрочена или недействительна",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "failed to delete booking — бронирование не найдено, не принадлежит пользователю или не удалено",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/contact": {
+            "post": {
+                "description": "Принимает публичную заявку с именем, email и телефоном.\nЗаявка отправляется подписчикам Telegram-бота. Если подписчиков нет, запрос всё равно считается успешным.\nАвторизация не требуется.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "text/plain"
+                ],
+                "tags": [
+                    "Контактные заявки"
+                ],
+                "summary": "Отправить контактную заявку",
+                "parameters": [
+                    {
+                        "description": "Контактные данные заявителя",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_AVGsync_keyfreestay_backend_internal_model.ContactRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Пустой ответ со статусом 200",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "invalid request body — тело запроса не JSON или структура не совпадает со схемой",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "failed to send contact request — не удалось получить подписчиков или отправить заявку",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/housing": {
+            "get": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "description": "Возвращает список объектов жилья, доступный текущему пользователю.\nПользователь с ролью `user` получает только опубликованные объекты. Владелец/администратор получает свои объекты.\nВ списке возвращается краткая карточка и публичный URL первого изображения, если изображение есть.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Жильё"
+                ],
+                "summary": "Получить список объектов жилья",
+                "responses": {
+                    "200": {
+                        "description": "Список объектов жилья",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_AVGsync_keyfreestay_backend_internal_model_response.HousingListResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "unauthorized — cookie `token` отсутствует, просрочена или недействительна",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "failed to get housing list — список не получен",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "description": "Создаёт черновик объекта жилья для текущего пользователя.\nПри создании можно передать тип жилья, название, описание и адрес. Остальные поля заполняются через PATCH /housing.\nНовый объект принадлежит пользователю из cookie `token`.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Жильё"
+                ],
+                "summary": "Создать объект жилья",
+                "parameters": [
+                    {
+                        "description": "Начальные данные объекта жилья",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_AVGsync_keyfreestay_backend_internal_model_request.CreateHousingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ID созданного объекта: {\\\"id\\\":\\\"550e8400-e29b-41d4-a716-446655440000\\\"}",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "invalid request body — тело запроса не JSON или структура не совпадает со схемой",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "unauthorized — cookie `token` отсутствует, просрочена или недействительна",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "failed to create housing — объект не создан",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "description": "Удаляет объект жилья текущего пользователя по query-параметру `id`.\nУдалять объект может только владелец. После удаления сервис также удаляет связанные изображения из S3/MinIO.",
+                "produces": [
+                    "text/plain"
+                ],
+                "tags": [
+                    "Жильё"
+                ],
+                "summary": "Удалить объект жилья",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "550e8400-e29b-41d4-a716-446655440000",
+                        "description": "UUID объекта жилья",
+                        "name": "id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Пустой ответ со статусом 200",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "missing housing ID — id не передан",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "unauthorized — cookie `token` отсутствует, просрочена или недействительна",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "failed to delete housing — объект не найден, не принадлежит пользователю или не удалён",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "description": "Частично обновляет объект жилья текущего пользователя.\nID объекта передаётся в query-параметре `id`. Изменять объект может только его владелец.\nДля публикации (`status=published`) объект должен иметь обязательные поля: название, адрес, координаты, цену за ночь и максимум гостей.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "text/plain"
+                ],
+                "tags": [
+                    "Жильё"
+                ],
+                "summary": "Обновить объект жилья",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "550e8400-e29b-41d4-a716-446655440000",
+                        "description": "UUID объекта жилья",
+                        "name": "id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "description": "Поля объекта жилья, которые нужно изменить",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_AVGsync_keyfreestay_backend_internal_model_request.UpdateHousingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Пустой ответ со статусом 200",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "missing housing ID / invalid request body — не передан id или тело запроса некорректно",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "unauthorized — cookie `token` отсутствует, просрочена или недействительна",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "failed to update housing — объект не найден, не принадлежит пользователю или не прошёл ограничения БД",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/housing/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "description": "Возвращает полную карточку объекта жилья с параметрами, рейтингом и списком изображений.\nДля каждого изображения сервис формирует публичный URL из storage key.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Жильё"
+                ],
+                "summary": "Получить объект жилья по ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "550e8400-e29b-41d4-a716-446655440000",
+                        "description": "UUID объекта жилья",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Полная карточка объекта жилья",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_AVGsync_keyfreestay_backend_internal_model.HousingResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "missing housing ID — id не передан в path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "unauthorized — cookie `token` отсутствует, просрочена или недействительна",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "failed to get housing — объект не найден или произошла внутренняя ошибка",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/housing/{id}/images": {
+            "post": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "description": "Загружает одно или несколько изображений для объекта жилья текущего пользователя.\nID объекта передаётся в path. Файлы передаются через multipart-поле `file`; поле можно повторять для нескольких файлов.\nРазрешены MIME-типы `image/jpeg`, `image/png`, `image/webp`. Порядок изображений назначается автоматически.",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "text/plain"
+                ],
+                "tags": [
+                    "Изображения жилья"
+                ],
+                "summary": "Загрузить изображения объекта жилья",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "550e8400-e29b-41d4-a716-446655440000",
+                        "description": "UUID объекта жилья",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "Изображение жилья; можно передать несколько частей с именем `file`",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Пустой ответ со статусом 200",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "missing housing ID / too large or bad multipart / file required / one of files too large / only jpeg/png/webp allowed — ошибка параметров или файла",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "unauthorized — cookie `token` отсутствует, просрочена или недействительна",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "cannot read file / failed to upload image — файл не прочитан, не загружен или объект не принадлежит пользователю",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "description": "Удаляет изображение из S3/MinIO и запись о нём в БД.\nID объекта передаётся в path, storage key изображения — в query-параметре `key`.\nУдалять изображение может только владелец объекта жилья.",
+                "produces": [
+                    "text/plain"
+                ],
+                "tags": [
+                    "Изображения жилья"
+                ],
+                "summary": "Удалить изображение объекта жилья",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "550e8400-e29b-41d4-a716-446655440000",
+                        "description": "UUID объекта жилья",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "example": "/housing/550e8400-e29b-41d4-a716-446655440000/7a45d9c2-0000-4000-9000-123456789abc.jpg",
+                        "description": "Storage key изображения в S3/MinIO",
+                        "name": "key",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Пустой ответ со статусом 200",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "missing image key / missing housing ID — не передан key или id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "unauthorized — cookie `token` отсутствует, просрочена или недействительна",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "failed to delete image — изображение не найдено, объект не принадлежит пользователю или удаление не выполнено",
                         "schema": {
                             "type": "string"
                         }
@@ -116,7 +747,7 @@
                         "CookieAuth": []
                     }
                 ],
-                "description": "Возвращает профиль пользователя, определённого по JWT claims.\nТребует валидную cookie `token`, полученную через /auth/login.",
+                "description": "Возвращает профиль пользователя из JWT claims в cookie `token`.\nИспользуйте этот метод для проверки текущей сессии и отображения данных профиля.",
                 "produces": [
                     "application/json"
                 ],
@@ -128,17 +759,17 @@
                     "200": {
                         "description": "Профиль текущего пользователя",
                         "schema": {
-                            "$ref": "#/definitions/github_com_AVGsync_analysis-pro_backend_internal_model_response.UserResponse"
+                            "$ref": "#/definitions/github_com_AVGsync_keyfreestay_backend_internal_model_response.UserResponse"
                         }
                     },
                     "401": {
-                        "description": "Пользователь не авторизован",
+                        "description": "unauthorized — cookie `token` отсутствует, просрочена или недействительна",
                         "schema": {
                             "type": "string"
                         }
                     },
                     "500": {
-                        "description": "Не удалось получить пользователя",
+                        "description": "claims not found in context / failed to get user — внутренняя ошибка получения профиля",
                         "schema": {
                             "type": "string"
                         }
@@ -151,7 +782,7 @@
                         "CookieAuth": []
                     }
                 ],
-                "description": "Обновляет email и/или полное имя текущего пользователя.\nВсе поля необязательные. Если поле не передано, прежнее значение сохраняется.\nТребует валидную cookie `token`, полученную через /auth/login.",
+                "description": "Частично обновляет email, полное имя и/или телефон текущего пользователя.\nВсе поля необязательные. Не переданные поля сохраняют прежнее значение.\nЕсли email меняется, он должен оставаться уникальным.",
                 "consumes": [
                     "application/json"
                 ],
@@ -164,12 +795,12 @@
                 "summary": "Обновить профиль текущего пользователя",
                 "parameters": [
                     {
-                        "description": "Данные обновления профиля: email и/или полное имя. Примеры значений указаны в схеме.",
+                        "description": "Поля профиля, которые нужно изменить",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/github_com_AVGsync_analysis-pro_backend_internal_model_request.UserUpdateRequest"
+                            "$ref": "#/definitions/github_com_AVGsync_keyfreestay_backend_internal_model_request.UserUpdateRequest"
                         }
                     }
                 ],
@@ -177,23 +808,170 @@
                     "200": {
                         "description": "Обновлённый профиль пользователя",
                         "schema": {
-                            "$ref": "#/definitions/github_com_AVGsync_analysis-pro_backend_internal_model_response.UserResponse"
+                            "$ref": "#/definitions/github_com_AVGsync_keyfreestay_backend_internal_model_response.UserResponse"
                         }
                     },
                     "400": {
-                        "description": "Некорректное тело запроса",
+                        "description": "invalid request body — тело запроса не JSON или структура не совпадает со схемой",
                         "schema": {
                             "type": "string"
                         }
                     },
                     "401": {
-                        "description": "Пользователь не авторизован",
+                        "description": "unauthorized — cookie `token` отсутствует, просрочена или недействительна",
                         "schema": {
                             "type": "string"
                         }
                     },
                     "500": {
-                        "description": "Не удалось обновить пользователя",
+                        "description": "claims not found in context / failed to update user — внутренняя ошибка обновления профиля",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/payments": {
+            "get": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "description": "Возвращает платёжные методы текущего пользователя.\nСписок отсортирован так, что основной метод (`is_default=true`) идёт первым, затем более новые методы.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Платёжные методы"
+                ],
+                "summary": "Получить список платёжных методов",
+                "responses": {
+                    "200": {
+                        "description": "Список платёжных методов пользователя",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_AVGsync_keyfreestay_backend_internal_model_response.PaymentMethodListResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "unauthorized — cookie `token` отсутствует, просрочена или недействительна",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "failed to get payment method list — список не получен",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/payments/create": {
+            "put": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "description": "Создаёт платёжный метод текущего пользователя.\nAPI хранит только безопасные карточные данные: последние 4 цифры, бренд, срок действия, имя держателя и флаг основного метода.\nЕсли `is_default=true`, текущий основной метод пользователя сбрасывается.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Платёжные методы"
+                ],
+                "summary": "Добавить платёжный метод",
+                "parameters": [
+                    {
+                        "description": "Данные платёжного метода",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_AVGsync_keyfreestay_backend_internal_model_request.CreatePaymentMethodRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Созданный платёжный метод",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_AVGsync_keyfreestay_backend_internal_model_response.PaymentMethodResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "invalid request body — тело запроса не JSON или структура не совпадает со схемой",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "unauthorized — cookie `token` отсутствует, просрочена или недействительна",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "failed to create payment method — платёжный метод не создан",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/payments/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "description": "Удаляет платёжный метод текущего пользователя по ID.\nПользователь может удалить только свой платёжный метод.",
+                "produces": [
+                    "text/plain"
+                ],
+                "tags": [
+                    "Платёжные методы"
+                ],
+                "summary": "Удалить платёжный метод",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "550e8400-e29b-41d4-a716-446655440000",
+                        "description": "UUID платёжного метода",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Пустой ответ со статусом 200",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "missing payment method ID — id не передан в path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "unauthorized — cookie `token` отсутствует, просрочена или недействительна",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "failed to delete payment method — платёжный метод не найден, не принадлежит пользователю или не удалён",
                         "schema": {
                             "type": "string"
                         }
@@ -203,7 +981,7 @@
         },
         "/ping": {
             "get": {
-                "description": "Лёгкая проверка маршрутизации API сервера.\nНе проверяет доступность PostgreSQL и сервиса прогнозирования.",
+                "description": "Лёгкая публичная проверка маршрутизации API сервера.\nВозвращает `pong`, если HTTP-сервер запущен и маршрут доступен.\nНе проверяет доступность PostgreSQL, S3/MinIO и Telegram.",
                 "produces": [
                     "text/plain"
                 ],
@@ -220,490 +998,325 @@
                     }
                 }
             }
-        },
-        "/products/export/assortment": {
-            "get": {
-                "security": [
-                    {
-                        "CookieAuth": []
-                    }
-                ],
-                "description": "Скачивает отчёт по аналитике ассортимента в формате CSV или XML.\nКолонки CSV: `Товар`, `SKU`, `Категория`, `Выручка`, `Объём продаж`, `Группа ABC/XYZ`.\nПоля элемента XML: `name`, `sku`, `category`, `revenue`, `quantity`, `abc_xyz_group`.\nТребует валидную cookie `token`. Формат имени файла: `assortment_YYYY-MM-DD.csv` или `assortment_YYYY-MM-DD.xml`.",
-                "produces": [
-                    "text/csv",
-                    "application/xml"
-                ],
-                "tags": [
-                    "Экспорт"
-                ],
-                "summary": "Экспортировать аналитику ассортимента",
-                "parameters": [
-                    {
-                        "enum": [
-                            "csv",
-                            "xml"
-                        ],
-                        "type": "string",
-                        "default": "csv",
-                        "description": "Формат экспорта. Пустое значение или `csv` возвращает CSV; `xml` возвращает XML.",
-                        "name": "type",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Файл экспорта ассортимента",
-                        "schema": {
-                            "type": "file"
-                        },
-                        "headers": {
-                            "Content-Disposition": {
-                                "type": "string",
-                                "description": "attachment; filename=\\\"assortment_2026-04-29.csv\\"
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Пользователь не авторизован",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "500": {
-                        "description": "Не удалось получить данные ассортимента",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                }
-            }
-        },
-        "/products/export/forecast": {
-            "get": {
-                "security": [
-                    {
-                        "CookieAuth": []
-                    }
-                ],
-                "description": "Скачивает отчёт по рекомендациям прогноза в формате CSV или XML.\nКолонки CSV: `Товар`, `SKU`, `Прогноз продаж`, `Рекомендуемый запас`, `Текущий остаток`, `Статус`.\nПоля элемента XML: `name`, `sku`, `forecast_total`, `recommend_order`, `current_stock`, `urgency`.\nТребует валидную cookie `token`. Формат имени файла: `forecast_YYYY-MM-DD.csv` или `forecast_YYYY-MM-DD.xml`.",
-                "produces": [
-                    "text/csv",
-                    "application/xml"
-                ],
-                "tags": [
-                    "Экспорт"
-                ],
-                "summary": "Экспортировать рекомендации прогноза",
-                "parameters": [
-                    {
-                        "maximum": 365,
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 30,
-                        "description": "Горизонт прогноза в днях. По умолчанию: 30.",
-                        "name": "days",
-                        "in": "query"
-                    },
-                    {
-                        "maximum": 730,
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 90,
-                        "description": "Период истории продаж в днях. По умолчанию: 90.",
-                        "name": "history",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "csv",
-                            "xml"
-                        ],
-                        "type": "string",
-                        "default": "csv",
-                        "description": "Формат экспорта. Пустое значение или `csv` возвращает CSV; `xml` возвращает XML.",
-                        "name": "type",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Файл экспорта прогноза",
-                        "schema": {
-                            "type": "file"
-                        },
-                        "headers": {
-                            "Content-Disposition": {
-                                "type": "string",
-                                "description": "attachment; filename=\\\"forecast_2026-04-29.csv\\"
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Пользователь не авторизован",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "500": {
-                        "description": "Не удалось получить данные прогноза",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                }
-            }
-        },
-        "/products/forecast": {
-            "get": {
-                "security": [
-                    {
-                        "CookieAuth": []
-                    }
-                ],
-                "description": "Строит прогноз спроса по каждому товару на указанный горизонт.\nСервер загружает историю продаж товаров из PostgreSQL и вызывает сервис прогнозирования.\nАдаптивный статистический прогноз продаж. Для товаров без продаж используется нулевой прогноз, для товаров с малым количеством данных — среднее значение за период, для редких продаж — метод Croston/SBA, для регулярных продаж — EWMA-прогноз с учетом недельной сезонности и тренда. История для модели: выбранный период.\nТребует валидную cookie `token`.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Прогноз"
-                ],
-                "summary": "Получить прогноз продаж по товарам",
-                "parameters": [
-                    {
-                        "maximum": 365,
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 30,
-                        "description": "Горизонт прогноза в днях. По умолчанию: 30.",
-                        "name": "days",
-                        "in": "query"
-                    },
-                    {
-                        "maximum": 730,
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 90,
-                        "description": "Период истории продаж в днях. По умолчанию: 90.",
-                        "name": "history",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Прогноз по каждому товару с разбивкой по дням",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/github_com_AVGsync_analysis-pro_backend_internal_model.ForecastDetail"
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Пользователь не авторизован",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "500": {
-                        "description": "Не удалось получить прогноз",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                }
-            }
-        },
-        "/products/forecast/monthly": {
-            "get": {
-                "security": [
-                    {
-                        "CookieAuth": []
-                    }
-                ],
-                "description": "Агрегирует прогнозное количество продаж и прогнозную выручку по месяцам.\nИспользуется для графиков и верхнеуровневого планирования выручки.\nТребует валидную cookie `token`.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Прогноз"
-                ],
-                "summary": "Получить помесячный прогноз",
-                "parameters": [
-                    {
-                        "maximum": 365,
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 30,
-                        "description": "Горизонт прогноза в днях. По умолчанию: 30.",
-                        "name": "days",
-                        "in": "query"
-                    },
-                    {
-                        "maximum": 730,
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 90,
-                        "description": "Период истории продаж в днях. По умолчанию: 90.",
-                        "name": "history",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Итоги прогноза, сгруппированные по месяцам",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/github_com_AVGsync_analysis-pro_backend_internal_model.MonthlyPoint"
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Пользователь не авторизован",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "500": {
-                        "description": "Не удалось получить помесячный прогноз",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                }
-            }
-        },
-        "/products/recommendations": {
-            "get": {
-                "security": [
-                    {
-                        "CookieAuth": []
-                    }
-                ],
-                "description": "Возвращает товары, у которых прогнозный спрос превышает текущий остаток.\n`recommend_order` равен прогнозному спросу минус текущий остаток.\n`urgency` зависит от запаса в днях: `high` \u003c= 7 дней, `medium` \u003c= 14 дней, иначе `ok`.\nТребует валидную cookie `token`.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Прогноз"
-                ],
-                "summary": "Получить рекомендации по закупкам",
-                "parameters": [
-                    {
-                        "maximum": 365,
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 30,
-                        "description": "Горизонт прогноза в днях. По умолчанию: 30.",
-                        "name": "days",
-                        "in": "query"
-                    },
-                    {
-                        "maximum": 730,
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 90,
-                        "description": "Период истории продаж в днях. По умолчанию: 90.",
-                        "name": "history",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Список рекомендаций по закупкам, отсортированный по срочности",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/github_com_AVGsync_analysis-pro_backend_internal_model.RecommendationItem"
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Пользователь не авторизован",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "500": {
-                        "description": "Не удалось получить рекомендации",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                }
-            }
-        },
-        "/products/sell-detail": {
-            "get": {
-                "security": [
-                    {
-                        "CookieAuth": []
-                    }
-                ],
-                "description": "Возвращает продажи товаров, сгруппированные по дате продажи, товару и категории.\nФильтр периода передаётся query-параметрами `from` и `to` в формате `YYYY-MM-DD`.\nЕсли `from` не передан, используется дата месяц назад. Если `to` не передан, используется текущая дата.\nТребует валидную cookie `token`.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Товары"
-                ],
-                "summary": "Получить детализацию продаж",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Начало периода включительно в формате YYYY-MM-DD. Пример: 2026-02-01.",
-                        "name": "from",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Конец периода включительно в формате YYYY-MM-DD. Пример: 2026-04-30.",
-                        "name": "to",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Строки детализации продаж",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/github_com_AVGsync_analysis-pro_backend_internal_model.SaleDetail"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Некорректные query-параметры",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "401": {
-                        "description": "Пользователь не авторизован",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "500": {
-                        "description": "Не удалось получить детализацию продаж",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                }
-            }
         }
     },
     "definitions": {
-        "github_com_AVGsync_analysis-pro_backend_internal_model.DailyPoint": {
+        "github_com_AVGsync_keyfreestay_backend_internal_model.ContactRequest": {
             "type": "object",
+            "required": [
+                "email",
+                "name",
+                "phone"
+            ],
             "properties": {
-                "date": {
-                    "type": "string"
+                "email": {
+                    "description": "Email для обратной связи.",
+                    "type": "string",
+                    "example": "ivan.petrov@example.com"
                 },
-                "quantity": {
-                    "type": "integer"
+                "name": {
+                    "description": "Имя заявителя.",
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 2,
+                    "example": "Иван Петров"
+                },
+                "phone": {
+                    "description": "Телефон для обратной связи.",
+                    "type": "string",
+                    "maxLength": 20,
+                    "minLength": 5,
+                    "example": "+1234567890"
                 }
             }
         },
-        "github_com_AVGsync_analysis-pro_backend_internal_model.ForecastDetail": {
+        "github_com_AVGsync_keyfreestay_backend_internal_model.HousingImage": {
             "type": "object",
             "properties": {
-                "daily_avg": {
-                    "type": "number"
+                "HousingID": {
+                    "description": "UUID объекта жилья.",
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
                 },
-                "daily_breakdown": {
+                "ID": {
+                    "description": "UUID изображения.",
+                    "type": "string",
+                    "example": "880e8400-e29b-41d4-a716-446655440000"
+                },
+                "ImageURL": {
+                    "description": "Публичный URL изображения, сформированный из storage key.",
+                    "type": "string",
+                    "example": "https://cdn.keyfreestay.local/housing/550e8400-e29b-41d4-a716-446655440000/7a45d9c2-0000-4000-9000-123456789abc.jpg"
+                },
+                "Position": {
+                    "description": "Позиция изображения в галерее.",
+                    "type": "integer",
+                    "example": 0
+                },
+                "StorageKey": {
+                    "description": "Storage key файла в S3/MinIO.",
+                    "type": "string",
+                    "example": "/housing/550e8400-e29b-41d4-a716-446655440000/7a45d9c2-0000-4000-9000-123456789abc.jpg"
+                }
+            }
+        },
+        "github_com_AVGsync_keyfreestay_backend_internal_model.HousingResponse": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "description": "Адрес объекта.",
+                    "type": "string",
+                    "example": "Москва, ул. Тверская, 12"
+                },
+                "amenities": {
+                    "description": "Список удобств объекта.",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_AVGsync_analysis-pro_backend_internal_model.DailyPoint"
+                        "type": "string",
+                        "enum": [
+                            "kitchen",
+                            "wifi",
+                            "air_conditioner",
+                            "parking",
+                            "washing_machine",
+                            "heating",
+                            "smart_lock",
+                            "smart_lighting",
+                            "smart_thermostat",
+                            "voice_assistant"
+                        ]
+                    },
+                    "example": [
+                        "wifi",
+                        "smart_lock"
+                    ]
+                },
+                "cancellation_policy": {
+                    "description": "Правила отмены бронирования.",
+                    "type": "string",
+                    "enum": [
+                        "flexible",
+                        "moderate",
+                        "strict"
+                    ],
+                    "example": "flexible"
+                },
+                "created_at": {
+                    "description": "Дата создания объекта.",
+                    "type": "string",
+                    "example": "2026-05-15T12:00:00Z"
+                },
+                "description": {
+                    "description": "Подробное описание жилья.",
+                    "type": "string",
+                    "example": "Светлая квартира рядом с метро, бесконтактное заселение, быстрый Wi-Fi."
+                },
+                "housing_type": {
+                    "description": "Тип объекта жилья.",
+                    "type": "string",
+                    "enum": [
+                        "apartment",
+                        "house",
+                        "office"
+                    ],
+                    "example": "apartment"
+                },
+                "id": {
+                    "description": "UUID объекта жилья.",
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "images": {
+                    "description": "Изображения объекта жилья.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_AVGsync_keyfreestay_backend_internal_model.HousingImage"
                     }
                 },
-                "forecast_total": {
-                    "type": "integer"
+                "latitude": {
+                    "description": "Широта объекта.",
+                    "type": "number",
+                    "example": 55.7558
                 },
-                "method": {
-                    "type": "string"
+                "longitude": {
+                    "description": "Долгота объекта.",
+                    "type": "number",
+                    "example": 37.6173
                 },
-                "product_id": {
-                    "type": "integer"
-                },
-                "product_name": {
-                    "type": "string"
-                },
-                "sku": {
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_AVGsync_analysis-pro_backend_internal_model.MonthlyPoint": {
-            "type": "object",
-            "properties": {
-                "forecast_qty": {
-                    "type": "integer"
-                },
-                "forecast_revenue": {
-                    "type": "number"
-                },
-                "month": {
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_AVGsync_analysis-pro_backend_internal_model.RecommendationItem": {
-            "type": "object",
-            "properties": {
-                "current_stock": {
-                    "type": "integer"
-                },
-                "forecast_total": {
-                    "type": "integer"
-                },
-                "product_id": {
-                    "type": "integer"
-                },
-                "product_name": {
-                    "type": "string"
-                },
-                "recommend_order": {
-                    "type": "integer"
-                },
-                "sku": {
-                    "type": "string"
-                },
-                "stock_days_left": {
-                    "type": "integer"
-                },
-                "urgency": {
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_AVGsync_analysis-pro_backend_internal_model.SaleDetail": {
-            "type": "object",
-            "properties": {
-                "category": {
-                    "type": "string",
-                    "example": "Смартфоны"
-                },
-                "product_name": {
-                    "type": "string",
-                    "example": "iPhone 15"
-                },
-                "quantity": {
+                "max_guests": {
+                    "description": "Максимальное количество гостей.",
                     "type": "integer",
                     "example": 4
                 },
-                "revenue": {
+                "price_per_night": {
+                    "description": "Цена за одну ночь.",
                     "type": "number",
-                    "example": 399996
+                    "example": 6500
                 },
-                "sold_at": {
+                "rating_avg": {
+                    "description": "Средняя оценка объекта.",
+                    "type": "number",
+                    "example": 4.8
+                },
+                "rating_count": {
+                    "description": "Количество оценок.",
+                    "type": "integer",
+                    "example": 12
+                },
+                "status": {
+                    "description": "Статус объекта.",
                     "type": "string",
-                    "example": "2026-04-29T00:00:00Z"
+                    "enum": [
+                        "draft",
+                        "published",
+                        "unpublished"
+                    ],
+                    "example": "published"
+                },
+                "title": {
+                    "description": "Название объекта.",
+                    "type": "string",
+                    "example": "Современная квартира в центре"
+                },
+                "updated_at": {
+                    "description": "Дата последнего обновления объекта.",
+                    "type": "string",
+                    "example": "2026-05-15T12:30:00Z"
+                },
+                "user_id": {
+                    "description": "UUID владельца объекта.",
+                    "type": "string",
+                    "example": "440e8400-e29b-41d4-a716-446655440000"
                 }
             }
         },
-        "github_com_AVGsync_analysis-pro_backend_internal_model_request.LoginRequest": {
+        "github_com_AVGsync_keyfreestay_backend_internal_model_request.CreateBookingRequest": {
+            "type": "object",
+            "required": [
+                "check_in",
+                "check_out",
+                "guests_count",
+                "housing_id"
+            ],
+            "properties": {
+                "check_in": {
+                    "description": "Дата заезда в формате YYYY-MM-DD.",
+                    "type": "string",
+                    "example": "2026-06-10"
+                },
+                "check_out": {
+                    "description": "Дата выезда в формате YYYY-MM-DD. Должна быть позже даты заезда.",
+                    "type": "string",
+                    "example": "2026-06-15"
+                },
+                "guests_count": {
+                    "description": "Количество гостей. Не должно превышать вместимость объекта.",
+                    "type": "integer",
+                    "example": 2
+                },
+                "housing_id": {
+                    "description": "UUID опубликованного объекта жилья.",
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "payment_method_id": {
+                    "description": "UUID платёжного метода пользователя. Поле необязательно.",
+                    "type": "string",
+                    "example": "660e8400-e29b-41d4-a716-446655440000"
+                }
+            }
+        },
+        "github_com_AVGsync_keyfreestay_backend_internal_model_request.CreateHousingRequest": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "description": "Адрес объекта жилья в свободной форме.",
+                    "type": "string",
+                    "maxLength": 500,
+                    "minLength": 3,
+                    "example": "Москва, ул. Тверская, 12"
+                },
+                "description": {
+                    "description": "Подробное описание жилья, правил и особенностей проживания.",
+                    "type": "string",
+                    "maxLength": 5000,
+                    "example": "Светлая квартира рядом с метро, бесконтактное заселение, быстрый Wi-Fi."
+                },
+                "housing_type": {
+                    "description": "Тип объекта жилья. Если не передан, БД использует значение по умолчанию `apartment`.",
+                    "type": "string",
+                    "enum": [
+                        "apartment",
+                        "house",
+                        "office"
+                    ],
+                    "example": "apartment"
+                },
+                "title": {
+                    "description": "Название объекта для каталога и карточки жилья.",
+                    "type": "string",
+                    "maxLength": 200,
+                    "minLength": 3,
+                    "example": "Современная квартира в центре"
+                }
+            }
+        },
+        "github_com_AVGsync_keyfreestay_backend_internal_model_request.CreatePaymentMethodRequest": {
+            "type": "object",
+            "required": [
+                "card_brand",
+                "card_last4",
+                "cardholder_name",
+                "expiry_month",
+                "expiry_year"
+            ],
+            "properties": {
+                "card_brand": {
+                    "description": "Платёжная система карты.",
+                    "type": "string",
+                    "enum": [
+                        "visa",
+                        "mastercard",
+                        "mir",
+                        "unionpay",
+                        "other"
+                    ],
+                    "example": "visa"
+                },
+                "card_last4": {
+                    "description": "Последние 4 цифры карты. Полный номер карты API не принимает.",
+                    "type": "string",
+                    "example": "4242"
+                },
+                "cardholder_name": {
+                    "description": "Имя держателя карты.",
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 2,
+                    "example": "IVAN PETROV"
+                },
+                "expiry_month": {
+                    "description": "Месяц окончания срока действия карты.",
+                    "type": "integer",
+                    "maximum": 12,
+                    "minimum": 1,
+                    "example": 12
+                },
+                "expiry_year": {
+                    "description": "Год окончания срока действия карты.",
+                    "type": "integer",
+                    "maximum": 2099,
+                    "minimum": 2024,
+                    "example": 2028
+                },
+                "is_default": {
+                    "description": "Сделать метод основным для пользователя.",
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
+        "github_com_AVGsync_keyfreestay_backend_internal_model_request.LoginRequest": {
             "type": "object",
             "required": [
                 "email",
@@ -722,7 +1335,7 @@
                 }
             }
         },
-        "github_com_AVGsync_analysis-pro_backend_internal_model_request.NewUserRequest": {
+        "github_com_AVGsync_keyfreestay_backend_internal_model_request.NewUserRequest": {
             "type": "object",
             "required": [
                 "email",
@@ -747,10 +1360,114 @@
                     "type": "string",
                     "minLength": 8,
                     "example": "Str0ngPass!2026"
+                },
+                "phone": {
+                    "description": "Номер телефона в международном формате E.164.",
+                    "type": "string",
+                    "example": "+1234567890"
                 }
             }
         },
-        "github_com_AVGsync_analysis-pro_backend_internal_model_request.UserUpdateRequest": {
+        "github_com_AVGsync_keyfreestay_backend_internal_model_request.UpdateHousingRequest": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "description": "Адрес объекта жилья в свободной форме.",
+                    "type": "string",
+                    "maxLength": 500,
+                    "minLength": 3,
+                    "example": "Москва, ул. Тверская, 12"
+                },
+                "amenities": {
+                    "description": "Список удобств объекта.",
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "enum": [
+                            "kitchen",
+                            "wifi",
+                            "air_conditioner",
+                            "parking",
+                            "washing_machine",
+                            "heating",
+                            "smart_lock",
+                            "smart_lighting",
+                            "smart_thermostat",
+                            "voice_assistant"
+                        ]
+                    },
+                    "example": [
+                        "wifi",
+                        "smart_lock"
+                    ]
+                },
+                "cancellation_policy": {
+                    "description": "Правила отмены бронирования.",
+                    "type": "string",
+                    "enum": [
+                        "flexible",
+                        "moderate",
+                        "strict"
+                    ],
+                    "example": "flexible"
+                },
+                "description": {
+                    "description": "Подробное описание жилья, правил и особенностей проживания.",
+                    "type": "string",
+                    "maxLength": 5000,
+                    "example": "Светлая квартира рядом с метро, бесконтактное заселение, быстрый Wi-Fi."
+                },
+                "housing_type": {
+                    "description": "Тип объекта жилья.",
+                    "type": "string",
+                    "enum": [
+                        "apartment",
+                        "house",
+                        "office"
+                    ],
+                    "example": "apartment"
+                },
+                "latitude": {
+                    "description": "Широта объекта для карты.",
+                    "type": "number",
+                    "example": 55.7558
+                },
+                "longitude": {
+                    "description": "Долгота объекта для карты.",
+                    "type": "number",
+                    "example": 37.6173
+                },
+                "max_guests": {
+                    "description": "Максимальное количество гостей.",
+                    "type": "integer",
+                    "maximum": 50,
+                    "example": 4
+                },
+                "price_per_night": {
+                    "description": "Цена за одну ночь в валюте сервиса.",
+                    "type": "number",
+                    "example": 6500
+                },
+                "status": {
+                    "description": "Статус объекта. `published` доступен только когда заполнены обязательные поля для публикации.",
+                    "type": "string",
+                    "enum": [
+                        "draft",
+                        "published",
+                        "unpublished"
+                    ],
+                    "example": "published"
+                },
+                "title": {
+                    "description": "Название объекта для каталога и карточки жилья.",
+                    "type": "string",
+                    "maxLength": 200,
+                    "minLength": 3,
+                    "example": "Современная квартира в центре"
+                }
+            }
+        },
+        "github_com_AVGsync_keyfreestay_backend_internal_model_request.UserUpdateRequest": {
             "type": "object",
             "properties": {
                 "email": {
@@ -764,25 +1481,323 @@
                     "maxLength": 64,
                     "minLength": 3,
                     "example": "Иван Сергеевич Петров"
+                },
+                "phone": {
+                    "description": "Новый номер телефона. Если поле не передано, текущее значение не меняется.",
+                    "type": "string",
+                    "example": "+1234567890"
                 }
             }
         },
-        "github_com_AVGsync_analysis-pro_backend_internal_model_response.UserResponse": {
+        "github_com_AVGsync_keyfreestay_backend_internal_model_response.BookingListItem": {
+            "type": "object",
+            "properties": {
+                "check_in": {
+                    "description": "Дата заезда.",
+                    "type": "string",
+                    "example": "2026-06-10T00:00:00Z"
+                },
+                "check_out": {
+                    "description": "Дата выезда.",
+                    "type": "string",
+                    "example": "2026-06-15T00:00:00Z"
+                },
+                "created_at": {
+                    "description": "Дата создания бронирования.",
+                    "type": "string",
+                    "example": "2026-05-15T12:00:00Z"
+                },
+                "housing_id": {
+                    "description": "UUID объекта жилья.",
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "id": {
+                    "description": "UUID бронирования.",
+                    "type": "string",
+                    "example": "770e8400-e29b-41d4-a716-446655440000"
+                },
+                "status": {
+                    "description": "Статус бронирования.",
+                    "type": "string",
+                    "enum": [
+                        "pending",
+                        "confirmed",
+                        "cancelled",
+                        "completed"
+                    ],
+                    "example": "pending"
+                },
+                "total_price": {
+                    "description": "Итоговая стоимость бронирования.",
+                    "type": "number",
+                    "example": 33000
+                }
+            }
+        },
+        "github_com_AVGsync_keyfreestay_backend_internal_model_response.BookingListResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "description": "Бронирования текущего пользователя.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_AVGsync_keyfreestay_backend_internal_model_response.BookingListItem"
+                    }
+                },
+                "total": {
+                    "description": "Общее количество элементов в ответе.",
+                    "type": "integer",
+                    "example": 3
+                }
+            }
+        },
+        "github_com_AVGsync_keyfreestay_backend_internal_model_response.BookingResponse": {
+            "type": "object",
+            "properties": {
+                "check_in": {
+                    "description": "Дата заезда.",
+                    "type": "string",
+                    "example": "2026-06-10T00:00:00Z"
+                },
+                "check_out": {
+                    "description": "Дата выезда.",
+                    "type": "string",
+                    "example": "2026-06-15T00:00:00Z"
+                },
+                "created_at": {
+                    "description": "Дата создания бронирования.",
+                    "type": "string",
+                    "example": "2026-05-15T12:00:00Z"
+                },
+                "guests_count": {
+                    "description": "Количество гостей.",
+                    "type": "integer",
+                    "example": 2
+                },
+                "housing_id": {
+                    "description": "UUID объекта жилья.",
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "id": {
+                    "description": "UUID бронирования.",
+                    "type": "string",
+                    "example": "770e8400-e29b-41d4-a716-446655440000"
+                },
+                "payment_method_id": {
+                    "description": "UUID платёжного метода, если он был выбран.",
+                    "type": "string",
+                    "example": "660e8400-e29b-41d4-a716-446655440000"
+                },
+                "price_per_night_snapshot": {
+                    "description": "Цена за ночь, зафиксированная на момент бронирования.",
+                    "type": "number",
+                    "example": 6500
+                },
+                "service_fee": {
+                    "description": "Сервисный сбор.",
+                    "type": "number",
+                    "example": 500
+                },
+                "status": {
+                    "description": "Статус бронирования.",
+                    "type": "string",
+                    "enum": [
+                        "pending",
+                        "confirmed",
+                        "cancelled",
+                        "completed"
+                    ],
+                    "example": "pending"
+                },
+                "total_price": {
+                    "description": "Итоговая стоимость бронирования.",
+                    "type": "number",
+                    "example": 33000
+                }
+            }
+        },
+        "github_com_AVGsync_keyfreestay_backend_internal_model_response.HousingListItem": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "description": "Адрес объекта.",
+                    "type": "string",
+                    "example": "Москва, ул. Тверская, 12"
+                },
+                "housing_type": {
+                    "description": "Тип объекта жилья.",
+                    "type": "string",
+                    "enum": [
+                        "apartment",
+                        "house",
+                        "office"
+                    ],
+                    "example": "apartment"
+                },
+                "id": {
+                    "description": "UUID объекта жилья.",
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "max_guests": {
+                    "description": "Максимальное количество гостей.",
+                    "type": "integer",
+                    "example": 4
+                },
+                "price_per_night": {
+                    "description": "Цена за одну ночь.",
+                    "type": "number",
+                    "example": 6500
+                },
+                "rating_avg": {
+                    "description": "Средняя оценка объекта.",
+                    "type": "number",
+                    "example": 4.8
+                },
+                "rating_count": {
+                    "description": "Количество оценок.",
+                    "type": "integer",
+                    "example": 12
+                },
+                "status": {
+                    "description": "Статус объекта.",
+                    "type": "string",
+                    "enum": [
+                        "draft",
+                        "published",
+                        "unpublished"
+                    ],
+                    "example": "published"
+                },
+                "thumbnail_url": {
+                    "description": "Публичный URL первого изображения объекта, если изображение есть.",
+                    "type": "string",
+                    "example": "https://cdn.keyfreestay.local/housing/550e8400-e29b-41d4-a716-446655440000/photo.jpg"
+                },
+                "title": {
+                    "description": "Название объекта.",
+                    "type": "string",
+                    "example": "Современная квартира в центре"
+                }
+            }
+        },
+        "github_com_AVGsync_keyfreestay_backend_internal_model_response.HousingListResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "description": "Краткие карточки объектов жилья.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_AVGsync_keyfreestay_backend_internal_model_response.HousingListItem"
+                    }
+                },
+                "total": {
+                    "description": "Общее количество объектов в ответе.",
+                    "type": "integer",
+                    "example": 42
+                }
+            }
+        },
+        "github_com_AVGsync_keyfreestay_backend_internal_model_response.PaymentMethodListResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "description": "Платёжные методы пользователя.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_AVGsync_keyfreestay_backend_internal_model_response.PaymentMethodResponse"
+                    }
+                },
+                "total": {
+                    "description": "Общее количество методов в ответе.",
+                    "type": "integer",
+                    "example": 2
+                }
+            }
+        },
+        "github_com_AVGsync_keyfreestay_backend_internal_model_response.PaymentMethodResponse": {
+            "type": "object",
+            "properties": {
+                "card_brand": {
+                    "description": "Платёжная система карты.",
+                    "type": "string",
+                    "enum": [
+                        "visa",
+                        "mastercard",
+                        "mir",
+                        "unionpay",
+                        "other"
+                    ],
+                    "example": "visa"
+                },
+                "card_last4": {
+                    "description": "Последние 4 цифры карты.",
+                    "type": "string",
+                    "example": "4242"
+                },
+                "cardholder_name": {
+                    "description": "Имя держателя карты.",
+                    "type": "string",
+                    "example": "IVAN PETROV"
+                },
+                "created_at": {
+                    "description": "Дата добавления платёжного метода.",
+                    "type": "string",
+                    "example": "2026-05-15T12:00:00Z"
+                },
+                "expiry_month": {
+                    "description": "Месяц окончания срока действия карты.",
+                    "type": "integer",
+                    "maximum": 12,
+                    "minimum": 1,
+                    "example": 12
+                },
+                "expiry_year": {
+                    "description": "Год окончания срока действия карты.",
+                    "type": "integer",
+                    "maximum": 2099,
+                    "minimum": 2024,
+                    "example": 2028
+                },
+                "id": {
+                    "description": "UUID платёжного метода.",
+                    "type": "string",
+                    "example": "660e8400-e29b-41d4-a716-446655440000"
+                },
+                "is_default": {
+                    "description": "Является ли метод основным.",
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
+        "github_com_AVGsync_keyfreestay_backend_internal_model_response.UserResponse": {
             "type": "object",
             "properties": {
                 "email": {
+                    "description": "Email пользователя.",
                     "type": "string",
                     "example": "ivan.petrov@example.com"
                 },
                 "full_name": {
+                    "description": "Полное имя пользователя.",
                     "type": "string",
                     "example": "Иван Петров"
                 },
                 "id": {
+                    "description": "UUID пользователя.",
                     "type": "string",
                     "example": "550e8400-e29b-41d4-a716-446655440000"
                 },
+                "phone": {
+                    "description": "Телефон пользователя, если указан.",
+                    "type": "string",
+                    "example": "+1234567890"
+                },
                 "role": {
+                    "description": "Роль пользователя.",
                     "type": "string",
                     "enum": [
                         "user",
@@ -791,10 +1806,12 @@
                     "example": "user"
                 },
                 "subscription_expires": {
+                    "description": "Дата окончания подписки. Для бесплатного тарифа может быть null.",
                     "type": "string",
                     "example": "2026-12-31T23:59:59Z"
                 },
                 "subscription_plan": {
+                    "description": "Тарифный план пользователя.",
                     "type": "string",
                     "enum": [
                         "free",
@@ -808,7 +1825,7 @@
     },
     "securityDefinitions": {
         "CookieAuth": {
-            "description": "Cookie авторизации. Формат: token={jwt}",
+            "description": "Cookie авторизации. Формат заголовка: Cookie: token={jwt}",
             "type": "apiKey",
             "name": "Cookie",
             "in": "header"

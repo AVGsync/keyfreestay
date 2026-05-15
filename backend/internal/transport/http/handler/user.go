@@ -30,16 +30,16 @@ func NewUserHandler(useCase UserUseCase) *UserHandler {
 // RegisterNewUser godoc
 //
 // @Summary Зарегистрировать нового пользователя
-// @Description Создаёт аккаунт по полному имени, email и паролю.
-// @Description Email должен быть уникальным. Пароль хранится в виде хеша и никогда не возвращается в ответе.
-// @Description При успехе возвращает профиль созданного пользователя без токена; после регистрации вызовите /auth/login.
+// @Description Создаёт аккаунт гостя по полному имени, email, телефону и паролю.
+// @Description Email должен быть уникальным без учёта регистра. Пароль хешируется и никогда не возвращается в ответе.
+// @Description Новый пользователь получает роль `user` и тариф `free`. После регистрации нужно вызвать /auth/login, чтобы получить cookie `token`.
 // @Tags Авторизация
 // @Accept json
 // @Produce json
-// @Param request body request.NewUserRequest true "Данные регистрации: полное имя, email и пароль. Примеры значений указаны в схеме."
+// @Param request body request.NewUserRequest true "Данные регистрации пользователя"
 // @Success 200 {object} response.UserResponse "Профиль созданного пользователя"
-// @Failure 400 {string} string "Некорректное тело запроса"
-// @Failure 500 {string} string "Не удалось зарегистрировать пользователя"
+// @Failure 400 {string} string "invalid request body — тело запроса не JSON или структура не совпадает со схемой"
+// @Failure 500 {string} string "failed to register new user — пользователь не создан"
 // @Router /auth/register [post]
 func (h *UserHandler) RegisterNewUser() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -64,16 +64,16 @@ func (h *UserHandler) RegisterNewUser() http.HandlerFunc {
 //
 // @Summary Войти в аккаунт
 // @Description Проверяет email и пароль пользователя.
-// @Description При успехе устанавливает JWT в HttpOnly cookie с именем `token`.
-// @Description Защищённые маршруты используют только cookie `token`.
+// @Description При успехе устанавливает JWT в HttpOnly cookie `token` на 24 часа.
+// @Description Защищённые маршруты ожидают эту cookie в заголовке `Cookie`.
 // @Tags Авторизация
 // @Accept json
 // @Produce plain
-// @Param request body request.LoginRequest true "Данные входа: email и пароль. Примеры значений указаны в схеме."
-// @Success 200 {string} string "OK"
+// @Param request body request.LoginRequest true "Email и пароль зарегистрированного пользователя"
+// @Success 200 {string} string "Пустой ответ со статусом 200; JWT передан в Set-Cookie"
 // @Header 200 {string} Set-Cookie "token=<jwt>; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=86400"
-// @Failure 400 {string} string "Некорректное тело запроса"
-// @Failure 401 {string} string "Неверный email или пароль"
+// @Failure 400 {string} string "invalid request body — тело запроса не JSON или структура не совпадает со схемой"
+// @Failure 401 {string} string "invalid email or password — неверный email или пароль"
 // @Router /auth/login [post]
 func (h *UserHandler) LoginUser() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -106,15 +106,14 @@ func (h *UserHandler) LoginUser() http.HandlerFunc {
 // GetMe godoc
 //
 // @Summary Получить профиль текущего пользователя
-// @Description Возвращает профиль пользователя, определённого по JWT claims.
-// @Description Требует валидную cookie `token`, полученную через /auth/login.
+// @Description Возвращает профиль пользователя из JWT claims в cookie `token`.
+// @Description Используйте этот метод для проверки текущей сессии и отображения данных профиля.
 // @Tags Пользователи
 // @Produce json
 // @Security CookieAuth
 // @Success 200 {object} response.UserResponse "Профиль текущего пользователя"
-// @Failure 401 {string} string "Пользователь не авторизован"
-// @Failure 500 {string} string "Claims не найдены в контексте"
-// @Failure 500 {string} string "Не удалось получить пользователя"
+// @Failure 401 {string} string "unauthorized — cookie `token` отсутствует, просрочена или недействительна"
+// @Failure 500 {string} string "claims not found in context / failed to get user — внутренняя ошибка получения профиля"
 // @Router /me [get]
 func (h *UserHandler) GetMe() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -138,19 +137,18 @@ func (h *UserHandler) GetMe() http.HandlerFunc {
 // UpdateUser godoc
 //
 // @Summary Обновить профиль текущего пользователя
-// @Description Обновляет email и/или полное имя текущего пользователя.
-// @Description Все поля необязательные. Если поле не передано, прежнее значение сохраняется.
-// @Description Требует валидную cookie `token`, полученную через /auth/login.
+// @Description Частично обновляет email, полное имя и/или телефон текущего пользователя.
+// @Description Все поля необязательные. Не переданные поля сохраняют прежнее значение.
+// @Description Если email меняется, он должен оставаться уникальным.
 // @Tags Пользователи
 // @Accept json
 // @Produce json
 // @Security CookieAuth
-// @Param request body request.UserUpdateRequest true "Данные обновления профиля: email и/или полное имя. Примеры значений указаны в схеме."
+// @Param request body request.UserUpdateRequest true "Поля профиля, которые нужно изменить"
 // @Success 200 {object} response.UserResponse "Обновлённый профиль пользователя"
-// @Failure 400 {string} string "Некорректное тело запроса"
-// @Failure 401 {string} string "Пользователь не авторизован"
-// @Failure 500 {string} string "Claims не найдены в контексте"
-// @Failure 500 {string} string "Не удалось обновить пользователя"
+// @Failure 400 {string} string "invalid request body — тело запроса не JSON или структура не совпадает со схемой"
+// @Failure 401 {string} string "unauthorized — cookie `token` отсутствует, просрочена или недействительна"
+// @Failure 500 {string} string "claims not found in context / failed to update user — внутренняя ошибка обновления профиля"
 // @Router /me [patch]
 func (h *UserHandler) UpdateUser() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

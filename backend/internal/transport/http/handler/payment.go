@@ -26,6 +26,22 @@ func NewPaymentMethodHandler(useCase PaymentMethodUseCase) *PaymentMethodHandler
 	}
 }
 
+// CreatePaymentMethod godoc
+//
+// @Summary Добавить платёжный метод
+// @Description Создаёт платёжный метод текущего пользователя.
+// @Description API хранит только безопасные карточные данные: последние 4 цифры, бренд, срок действия, имя держателя и флаг основного метода.
+// @Description Если `is_default=true`, текущий основной метод пользователя сбрасывается.
+// @Tags Платёжные методы
+// @Accept json
+// @Produce json
+// @Security CookieAuth
+// @Param request body request.CreatePaymentMethodRequest true "Данные платёжного метода"
+// @Success 200 {object} response.PaymentMethodResponse "Созданный платёжный метод"
+// @Failure 400 {string} string "invalid request body — тело запроса не JSON или структура не совпадает со схемой"
+// @Failure 401 {string} string "unauthorized — cookie `token` отсутствует, просрочена или недействительна"
+// @Failure 500 {string} string "failed to create payment method — платёжный метод не создан"
+// @Router /payments/create [put]
 func (h *PaymentMethodHandler) CreatePaymentMethod() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		payment := &request.CreatePaymentMethodRequest{}
@@ -45,6 +61,18 @@ func (h *PaymentMethodHandler) CreatePaymentMethod() http.HandlerFunc {
 	}
 }
 
+// GetPaymentMethodList godoc
+//
+// @Summary Получить список платёжных методов
+// @Description Возвращает платёжные методы текущего пользователя.
+// @Description Список отсортирован так, что основной метод (`is_default=true`) идёт первым, затем более новые методы.
+// @Tags Платёжные методы
+// @Produce json
+// @Security CookieAuth
+// @Success 200 {object} response.PaymentMethodListResponse "Список платёжных методов пользователя"
+// @Failure 401 {string} string "unauthorized — cookie `token` отсутствует, просрочена или недействительна"
+// @Failure 500 {string} string "failed to get payment method list — список не получен"
+// @Router /payments [get]
 func (h *PaymentMethodHandler) GetPaymentMethodList() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		list, err := h.useCase.GetPaymentMethodList(r.Context())
@@ -58,6 +86,20 @@ func (h *PaymentMethodHandler) GetPaymentMethodList() http.HandlerFunc {
 	}
 }
 
+// DeletePaymentMethod godoc
+//
+// @Summary Удалить платёжный метод
+// @Description Удаляет платёжный метод текущего пользователя по ID.
+// @Description Пользователь может удалить только свой платёжный метод.
+// @Tags Платёжные методы
+// @Produce plain
+// @Security CookieAuth
+// @Param id path string true "UUID платёжного метода" example(550e8400-e29b-41d4-a716-446655440000)
+// @Success 200 {string} string "Пустой ответ со статусом 200"
+// @Failure 400 {string} string "missing payment method ID — id не передан в path"
+// @Failure 401 {string} string "unauthorized — cookie `token` отсутствует, просрочена или недействительна"
+// @Failure 500 {string} string "failed to delete payment method — платёжный метод не найден, не принадлежит пользователю или не удалён"
+// @Router /payments/{id} [delete]
 func (h *PaymentMethodHandler) DeletePaymentMethod() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		paymentID := chi.URLParam(r, "id")

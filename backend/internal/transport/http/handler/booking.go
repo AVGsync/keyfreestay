@@ -27,6 +27,22 @@ func NewBookingHandler(useCase BookingUseCase) *BookingHandler {
 	}
 }
 
+// CreateBooking godoc
+//
+// @Summary Создать бронирование
+// @Description Создаёт бронирование опубликованного объекта жилья для текущего пользователя.
+// @Description Объект должен быть опубликован, вместимость должна быть не меньше `guests_count`, даты не должны пересекаться с активными бронированиями.
+// @Description Стоимость рассчитывается сервером: цена за ночь на момент бронирования * количество ночей + сервисный сбор.
+// @Tags Бронирования
+// @Accept json
+// @Produce json
+// @Security CookieAuth
+// @Param request body request.CreateBookingRequest true "Данные бронирования"
+// @Success 200 {object} response.BookingResponse "Созданное бронирование"
+// @Failure 400 {string} string "invalid request body — тело запроса не JSON или структура не совпадает со схемой"
+// @Failure 401 {string} string "unauthorized — cookie `token` отсутствует, просрочена или недействительна"
+// @Failure 500 {string} string "failed to create booking — объект не найден, не опубликован, занят, не подходит по гостям или БД отклонила запрос"
+// @Router /booking/create [put]
 func (h *BookingHandler) CreateBooking() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		booking := &request.CreateBookingRequest{}
@@ -46,6 +62,20 @@ func (h *BookingHandler) CreateBooking() http.HandlerFunc {
 	}
 }
 
+// GetBookingByID godoc
+//
+// @Summary Получить бронирование по ID
+// @Description Возвращает бронирование текущего пользователя.
+// @Description Пользователь может получить только своё бронирование.
+// @Tags Бронирования
+// @Produce json
+// @Security CookieAuth
+// @Param id path string true "UUID бронирования" example(550e8400-e29b-41d4-a716-446655440000)
+// @Success 200 {object} response.BookingResponse "Детали бронирования"
+// @Failure 400 {string} string "missing booking ID — id не передан в path"
+// @Failure 401 {string} string "unauthorized — cookie `token` отсутствует, просрочена или недействительна"
+// @Failure 500 {string} string "failed to get booking — бронирование не найдено или не принадлежит пользователю"
+// @Router /booking/{id} [get]
 func (h *BookingHandler) GetBookingByID() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		bookingID := chi.URLParam(r, "id")
@@ -65,6 +95,17 @@ func (h *BookingHandler) GetBookingByID() http.HandlerFunc {
 	}
 }
 
+// GetBookingList godoc
+//
+// @Summary Получить список бронирований
+// @Description Возвращает все бронирования текущего пользователя, отсортированные по дате заезда от новых к старым.
+// @Tags Бронирования
+// @Produce json
+// @Security CookieAuth
+// @Success 200 {object} response.BookingListResponse "Список бронирований пользователя"
+// @Failure 401 {string} string "unauthorized — cookie `token` отсутствует, просрочена или недействительна"
+// @Failure 500 {string} string "failed to get booking list — список не получен"
+// @Router /booking [get]
 func (h *BookingHandler) GetBookingList() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		bookingList, err := h.useCase.GetBookingList(r.Context())
@@ -78,6 +119,20 @@ func (h *BookingHandler) GetBookingList() http.HandlerFunc {
 	}
 }
 
+// DeleteBooking godoc
+//
+// @Summary Удалить бронирование
+// @Description Удаляет бронирование текущего пользователя по ID.
+// @Description Пользователь может удалить только своё бронирование.
+// @Tags Бронирования
+// @Produce plain
+// @Security CookieAuth
+// @Param id path string true "UUID бронирования" example(550e8400-e29b-41d4-a716-446655440000)
+// @Success 200 {string} string "Пустой ответ со статусом 200"
+// @Failure 400 {string} string "missing booking ID — id не передан в path"
+// @Failure 401 {string} string "unauthorized — cookie `token` отсутствует, просрочена или недействительна"
+// @Failure 500 {string} string "failed to delete booking — бронирование не найдено, не принадлежит пользователю или не удалено"
+// @Router /booking/{id} [delete]
 func (h *BookingHandler) DeleteBooking() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		bookingID := chi.URLParam(r, "id")

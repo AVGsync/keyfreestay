@@ -5,6 +5,7 @@ type NewUserRequest struct {
 	FullName string `json:"full_name" validate:"required,min=3,max=64" example:"Иван Петров"`
 	// Уникальный email, используется для входа.
 	Email string `json:"email" validate:"required,email" example:"ivan.petrov@example.com"`
+	// Номер телефона в международном формате E.164.
 	Phone string `json:"phone,omitempty" validate:"omitempty,e164" example:"+1234567890"`
 	// Пароль, минимум 8 символов.
 	Password string `json:"password" validate:"required,min=8" example:"Str0ngPass!2026"`
@@ -27,6 +28,8 @@ type UserUpdateRequest struct {
 }
 
 type ChangePasswordRequest struct {
+	// Текущий пароль пользователя.
 	OldPassword string `json:"old_password" validate:"required" example:"Str0ngPass!2026"`
+	// Новый пароль, минимум 8 символов.
 	NewPassword string `json:"new_password" validate:"required,min=8" example:"N3wStr0ngPass!2026"`
 }

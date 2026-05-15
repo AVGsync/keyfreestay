@@ -202,8 +202,9 @@ func (s *APIServer) configureRouter() {
 // ping godoc
 //
 // @Summary Проверить доступность API сервера
-// @Description Лёгкая проверка маршрутизации API сервера.
-// @Description Не проверяет доступность PostgreSQL и сервиса прогнозирования.
+// @Description Лёгкая публичная проверка маршрутизации API сервера.
+// @Description Возвращает `pong`, если HTTP-сервер запущен и маршрут доступен.
+// @Description Не проверяет доступность PostgreSQL, S3/MinIO и Telegram.
 // @Tags Система
 // @Produce plain
 // @Success 200 {string} string "pong"
