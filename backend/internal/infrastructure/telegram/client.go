@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -14,9 +15,21 @@ type Client struct {
 }
 
 func NewClient(token string) *Client {
+	proxyURL, _ := url.Parse("http://bgLRyS:80tFKK@196.19.10.204:8000")
+
 	return &Client{
 		token: token,
-		http:  &http.Client{Timeout: 35 * time.Second}, // > long-poll timeout
+		http: &http.Client{
+			Timeout: 60 * time.Second, // запас на HTTP CONNECT + long-poll
+			Transport: &http.Transport{
+				Proxy:                 http.ProxyURL(proxyURL),
+				ForceAttemptHTTP2:     true,
+				MaxIdleConns:          10,
+				IdleConnTimeout:       90 * time.Second,
+				TLSHandshakeTimeout:   10 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
+			},
+		},
 	}
 }
 
