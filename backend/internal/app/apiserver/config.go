@@ -41,9 +41,9 @@ func (c *Config) DatabaseURL() string {
 }
 
 func NewConfig() (*Config, error) {
-    if err := loadEnv(); err != nil {
-        fmt.Fprintf(os.Stderr, "warn: .env not found: %v\n", err)
-    }
+    //if err := loadEnv(); err != nil {
+      //  fmt.Fprintf(os.Stderr, "warn: .env not found: %v\n", err)
+    //}
 
     var cfg Config
     if err := envconfig.Process("", &cfg); err != nil {

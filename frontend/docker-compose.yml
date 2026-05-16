@@ -1,0 +1,54 @@
+# docker-compose.yml — runs both projects together.
+#
+# Production (default):     docker compose up --build
+#   • landing → http://localhost:8080
+#   • app     → http://localhost:8081
+#
+# Development (hot reload): docker compose --profile dev up --build
+#   • landing → http://localhost:5173
+#   • app     → http://localhost:5174
+#
+services:
+
+  landing:
+    build:
+      context: ./keyfreestay-landing
+      target: prod
+    image: keyfreestay-landing:prod
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+
+  app:
+    build:
+      context: ./keyfreestay-app
+      target: prod
+    image: keyfreestay-app:prod
+    ports:
+      - "8081:80"
+    restart: unless-stopped
+
+  # ──────────────── DEV PROFILES ────────────────
+  landing-dev:
+    profiles: ["dev"]
+    build:
+      context: ./keyfreestay-landing
+      target: dev
+    image: keyfreestay-landing:dev
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./keyfreestay-landing:/app
+      - /app/node_modules
+
+  app-dev:
+    profiles: ["dev"]
+    build:
+      context: ./keyfreestay-app
+      target: dev
+    image: keyfreestay-app:dev
+    ports:
+      - "5174:5174"
+    volumes:
+      - ./keyfreestay-app:/app
+      - /app/node_modules

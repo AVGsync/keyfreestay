@@ -23,7 +23,7 @@ migrate-create:
 migrate-up:
 	@docker compose run --rm postgres-migrate \
 	-path /migrations \
-	-database "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=disable" \
+	-database "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=disable" \
 	up
 
 migrate-down:

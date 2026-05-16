@@ -1,23 +1,27 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: db
+    container_name: keyfreestay-db
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
     ports:
-      - "${POSTGRES_PORT}:${POSTGRES_PORT}"
+      - "${POSTGRES_PORT}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
-    networks:
-      - app_net
+    networks: [app_net]
 
   minio:
     image: minio/minio
+    container_name: keyfreestay-minio
+    restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
@@ -28,59 +32,114 @@ services:
       - "9000:9000"
       - "9001:9001"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: ["CMD-SHELL", "mc ready local || curl -fsS http://localhost:9000/minio/health/live"]
       interval: 10s
       timeout: 5s
-      retries: 5
-    networks:
-      - app_net   
-  
+      retries: 10
+    networks: [app_net]
+
   postgres-migrate:
     image: migrate/migrate:latest
-    container_name: migrate
+    container_name: keyfreestay-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
       - ./backend/migrations:/migrations
-    networks:
-      - app_net
+    command: [
+      "-path=/migrations",
+      "-database",
+      "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable",
+      "up"
+    ]
+    networks: [app_net]
+    restart: "no"
 
-  # backend:
-  #   build: ./backend
-  #   container_name: backend
-  #   restart: unless-stopped
-  #   env_file: .env
-  #   environment:
-  #     POSTGRES_HOST: db
-  #     POSTGRES_PORT: "${POSTGRES_PORT}"
-  #     BIND_ADDR: ${BIND_ADDR}
-  #   ports:
-  #     - "${BIND_ADDR}:${BIND_ADDR}"
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #   networks:
-  #     - app_net
+  backend:
+    build: ./backend
+    container_name: keyfreestay-backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      BIND_ADDR: ${BIND_ADDR}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      ENDPOINT: minio:9000
+      PUBLIC_URL: http://localhost:9000
+      USE_SSL: "false"
+    ports:
+      - "${BIND_ADDR}:${BIND_ADDR}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      postgres-migrate:
+        condition: service_completed_successfully
+    networks: [app_net]
+
+  landing:
+    build:
+      context: ./frontend/keyfreestay-landing
+      target: prod
+    container_name: keyfreestay-landing
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    depends_on: [backend]
+    networks: [app_net]
+
+  app:
+    build:
+      context: ./frontend/keyfreestay-app
+      target: prod
+    container_name: keyfreestay-app
+    restart: unless-stopped
+    ports:
+      - "8082:80"
+    depends_on: [backend]
+    networks: [app_net]
+
+  # ── dev-only services (run via `docker compose --profile dev up`) ─────────
+  landing-dev:
+    profiles: [dev]
+    build:
+      context: ./frontend/keyfreestay-landing
+      target: dev
+    container_name: keyfreestay-landing-dev
+    environment:
+      BACKEND_URL: http://backend:8080
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend/keyfreestay-landing:/app
+      - /app/node_modules
+    depends_on: [backend]
+    networks: [app_net]
+
+  app-dev:
+    profiles: [dev]
+    build:
+      context: ./frontend/keyfreestay-app
+      target: dev
+    container_name: keyfreestay-app-dev
+    environment:
+      BACKEND_URL: http://backend:8080
+    ports:
+      - "5174:5174"
+    volumes:
+      - ./frontend/keyfreestay-app:/app
+      - /app/node_modules
+    depends_on: [backend]
+    networks: [app_net]
 
   swagger:
+    profiles: [swagger]
     build:
       context: ./backend
       dockerfile: Dockerfile.swagger
-    profiles: ["swagger"]              
     volumes:
       - ./backend:/code
-
-  # frontend:
-  #   build: ./frontend
-  #   container_name: frontend
-  #   restart: unless-stopped
-  #   ports:
-  #     - "80:80"
-  #     - "443:443"
-  #   volumes:
-  #     - /var/lib/marzban/certs:/etc/nginx/certs:ro
-  #   depends_on:
-  #     - backend
-  #   networks:
-  #     - app_net
 
 networks:
   app_net:
@@ -88,3 +147,4 @@ networks:
 
 volumes:
   minio-data:
+  postgres-data:
