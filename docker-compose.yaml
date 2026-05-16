@@ -10,7 +10,7 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     ports:
-      - "${POSTGRES_PORT}:5432"
+      - "127.0.0.1:${POSTGRES_PORT}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
@@ -29,8 +29,7 @@ services:
     volumes:
       - minio-data:/data
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9001:9001"
     healthcheck:
       test: ["CMD-SHELL", "mc ready local || curl -fsS http://localhost:9000/minio/health/live"]
       interval: 10s
@@ -65,10 +64,8 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       ENDPOINT: minio:9000
-      PUBLIC_URL: http://localhost:9000
+      PUBLIC_URL: ${PUBLIC_URL}
       USE_SSL: "false"
-    ports:
-      - "${BIND_ADDR}:${BIND_ADDR}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -84,8 +81,6 @@ services:
       target: prod
     container_name: keyfreestay-landing
     restart: unless-stopped
-    ports:
-      - "8081:80"
     depends_on: [backend]
     networks: [app_net]
 
@@ -95,12 +90,28 @@ services:
       target: prod
     container_name: keyfreestay-app
     restart: unless-stopped
-    ports:
-      - "8082:80"
     depends_on: [backend]
     networks: [app_net]
 
-  # ── dev-only services (run via `docker compose --profile dev up`) ─────────
+  edge:
+    image: nginx:1.27-alpine
+    container_name: keyfreestay-edge
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx/song-ify.conf:/etc/nginx/conf.d/default.conf:ro
+      - /var/lib/keyfreestay/certs:/etc/nginx/certs:ro
+      - /var/www/acme:/var/www/acme:ro
+    depends_on:
+      - landing
+      - app
+      - backend
+      - minio
+    networks: [app_net]
+
+  # ── dev profile: `docker compose --profile dev up` ───────────────────────
   landing-dev:
     profiles: [dev]
     build:
