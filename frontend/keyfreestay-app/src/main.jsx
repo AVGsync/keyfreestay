@@ -6,6 +6,9 @@ import { theme } from './styles/theme'
 import GlobalStyle from './styles/GlobalStyle'
 import { AuthProvider } from './contexts/AuthContext'
 import App from './App'
+import { startRevealObserver } from './utils/reveal'
+
+startRevealObserver()
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

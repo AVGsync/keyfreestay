@@ -217,7 +217,7 @@ export default function HomePage() {
         {err && <ErrorText>{err}</ErrorText>}
 
         {view === 'list' ? (
-          <Grid>
+          <Grid className="reveal">
             {filtered.map(it => (
               <PropertyCard key={it.id} item={it} variant="tenant" favorited={fav.has(it.id)} onFavorite={fav.toggle} />
             ))}

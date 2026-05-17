@@ -17,17 +17,21 @@ const Text = styled.span`
 `
 
 function HouseIcon({ size }) {
-  const s = size === 'sm' ? 22 : 30
-  return (
-    <svg width={s} height={s} viewBox="0 0 32 32" style={{ flex: 'none' }}>
-      <path d="M4 17 L16 5 L28 17 V29 H4 Z" fill="#FCA17B" />
-      <rect x="22" y="9" width="3" height="6" fill="#E26A3F" />
-      <path d="M7 17 L16 9 L25 17 V28 H7 Z" fill="#FED7AA" />
-      <rect x="13" y="20" width="6" height="8" rx="0.5" fill="#7C3A0E" />
-      <rect x="9" y="19" width="3" height="3" fill="#7C3A0E" />
-      <rect x="20" y="19" width="3" height="3" fill="#7C3A0E" />
-    </svg>
-  )
+	const s = size === 'sm' ? 18 : 26
+	return (
+		<span
+			style={{
+				fontSize: s,
+				lineHeight: 1,
+				display: 'inline-block',
+				flex: 'none',
+			}}
+			role='img'
+			aria-label='house'
+		>
+			🏠
+		</span>
+	)
 }
 
 export default function Logo({ size = 'md' }) {

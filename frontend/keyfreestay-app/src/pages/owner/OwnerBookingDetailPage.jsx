@@ -33,6 +33,10 @@ const TenantCard = styled(Card)`
   }
   h4 { font-size: 15px; font-weight: 800; }
   .ph { font-size: 12px; color: #6B7280; margin-top: 2px; }
+  @media (max-width: 640px) {
+    grid-template-columns: 48px 1fr;
+    & > a, & > button { grid-column: 1 / -1; width: 100%; }
+  }
 `
 const Row = styled.div`
   display: flex; justify-content: space-between; padding: 12px 0;

@@ -28,13 +28,20 @@ const Option = styled.label`
   cursor: pointer;
   margin-bottom: 10px;
   position: relative;
-  input { accent-color: ${({ theme }) => theme.colors.primarySolid}; }
-  .ico { width: 32px; height: 22px; border-radius: 4px; background: #94A3B8; display: inline-flex; align-items: center; justify-content: center; color: #fff; font-size: 11px; }
-  .t { font-weight: 700; font-size: 14px; }
+  transition: border-color 200ms ease, background 200ms ease, transform 160ms ease;
+  &:hover { transform: translateX(2px); }
+  input { accent-color: ${({ theme }) => theme.colors.primarySolid}; flex: none; }
+  .ico { width: 32px; height: 22px; border-radius: 4px; background: #94A3B8; display: inline-flex; align-items: center; justify-content: center; color: #fff; font-size: 11px; flex: none; }
+  .body { min-width: 0; padding-right: 24px; }
+  .t { font-weight: 700; font-size: 14px; word-break: break-word; }
   .s { font-size: 12px; color: #6B7280; }
   &::after {
     content: ${({ $sel }) => $sel ? "'✓'" : "''"};
-    position: absolute; right: 16px; color: #16A34A; font-weight: 800;
+    position: absolute; right: 16px; top: 50%; transform: translateY(-50%); color: #16A34A; font-weight: 800;
+  }
+  @media (max-width: 540px) {
+    padding: 12px;
+    .t { font-size: 13px; }
   }
 `
 const AddBtn = styled.button`

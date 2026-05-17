@@ -1,5 +1,5 @@
 import styled from 'styled-components'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import Logo from './Logo'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -13,25 +13,40 @@ const Inner = styled.div`
   padding: 0 32px;
   height: 64px;
   display: flex; align-items: center; gap: 8px;
-  @media (max-width: 640px) { padding: 0 16px; height: 56px; }
+  @media (max-width: 640px) { padding: 0 12px; height: 56px; gap: 4px; }
+`
+const LogoLink = styled(Link)`
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center;
+  @media (max-width: 480px) {
+    span:last-child { display: none; }
+  }
 `
 const Crumb = styled.span`
   font-weight: 700; font-size: 16px;
   color: ${({ theme }) => theme.colors.textPrimary};
   display: inline-flex; align-items: center; gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   &::before {
     content: '/';
     color: ${({ theme }) => theme.colors.textMuted};
     font-weight: 400; margin-right: 2px;
   }
-  @media (max-width: 640px) { font-size: 14px; }
+  @media (max-width: 640px) { font-size: 13px; }
+  @media (max-width: 420px) { display: none; }
 `
 const Spacer = styled.div` flex: 1; `
 const IconBtn = styled(Link)`
   width: 40px; height: 40px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
   color: ${({ theme }) => theme.colors.textSecondary};
-  &:hover { background: ${({ theme }) => theme.colors.bgSoft}; }
+  flex: 0 0 auto;
+  transition: background 160ms ease, transform 160ms ease, color 160ms ease;
+  &:hover { background: ${({ theme }) => theme.colors.bgSoft}; color: ${({ theme }) => theme.colors.primarySolid}; transform: scale(1.05); }
+  &:active { transform: scale(0.96); }
+  @media (max-width: 640px) { width: 36px; height: 36px; }
 `
 
 const I = ({ d, ...p }) => (
@@ -49,7 +64,7 @@ export default function Header({ title }) {
   return (
     <Bar>
       <Inner>
-        <Link to={home}><Logo /></Link>
+        <LogoLink to={home}><Logo /></LogoLink>
         {title && <Crumb>{title}</Crumb>}
         <Spacer />
         {!isOwner && <IconBtn to="/app/favorites" title="Избранное"><HeartIcon /></IconBtn>}

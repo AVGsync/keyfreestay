@@ -33,7 +33,7 @@ export default function FavoritesPage() {
         <BackLink onClick={() => nav(-1)}>← Вернуться назад</BackLink>
         <PageTitle style={{ marginBottom: 24 }}>Избранное ❤</PageTitle>
         {list.length === 0 && <Card>Список пуст. Добавьте объекты в избранное со страницы поиска.</Card>}
-        <Grid>
+        <Grid className="reveal">
           {list.map(it => (
             <PropertyCard key={it.id} item={it} variant="tenant" favorited onFavorite={fav.toggle} />
           ))}

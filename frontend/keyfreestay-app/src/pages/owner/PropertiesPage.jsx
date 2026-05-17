@@ -32,7 +32,7 @@ export default function PropertiesPage() {
         <TopRow>
           <PrimaryButton as={Link} to="/owner/p/new">＋ Добавить объект</PrimaryButton>
         </TopRow>
-        <Grid>
+        <Grid className="reveal">
           {items.map(it => <PropertyCard key={it.id} item={it} variant="owner" />)}
         </Grid>
       </PageInner>

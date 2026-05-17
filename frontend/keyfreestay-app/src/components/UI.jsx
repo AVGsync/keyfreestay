@@ -3,16 +3,19 @@ import styled, { css } from 'styled-components'
 export const PageBg = styled.div`
   min-height: 100vh;
   background: ${({ theme }) => theme.gradients.pageBg};
+  animation: pageFadeIn 360ms ease-out both;
 `
 export const PageInner = styled.div`
   max-width: 1400px;
   margin: 0 auto;
   padding: 32px;
-  @media (max-width: 640px) { padding: 16px; }
+  @media (max-width: 900px) { padding: 24px 20px; }
+  @media (max-width: 640px) { padding: 16px 12px; }
 `
 export const PageTitle = styled.h1`
   font-size: 24px; font-weight: 800; letter-spacing: -0.01em;
   display: flex; align-items: center; gap: 8px;
+  @media (max-width: 640px) { font-size: 20px; }
 `
 export const BackLink = styled.button`
   background: none; border: none; cursor: pointer;
@@ -20,7 +23,8 @@ export const BackLink = styled.button`
   font-weight: 600; font-size: 14px;
   display: inline-flex; align-items: center; gap: 6px;
   padding: 0; margin-bottom: 24px;
-  &:hover { text-decoration: underline; }
+  transition: transform 160ms ease;
+  &:hover { text-decoration: underline; transform: translateX(-2px); }
 `
 
 export const Card = styled.section`
@@ -28,6 +32,7 @@ export const Card = styled.section`
   border-radius: ${({ theme }) => theme.radii.lg};
   box-shadow: ${({ theme }) => theme.shadows.sm};
   padding: ${({ $pad = '24px' }) => $pad};
+  @media (max-width: 640px) { padding: 18px; border-radius: 14px; }
 `
 
 export const Field = styled.div`

@@ -16,6 +16,10 @@ const PropRow = styled(Card)`
   }
   h3 { font-size: 16px; font-weight: 800; margin-bottom: 4px; }
   .r { color: #6B7280; font-size: 13px; }
+  @media (max-width: 540px) {
+    .img { width: 72px; height: 56px; }
+    h3 { font-size: 15px; }
+  }
 `
 const TwoCol = styled.div`
   display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;

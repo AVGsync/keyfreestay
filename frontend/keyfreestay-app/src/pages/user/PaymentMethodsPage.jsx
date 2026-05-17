@@ -21,12 +21,18 @@ const Row = styled.div`
   border: 2px solid ${({ $on }) => $on ? '#16A34A' : '#E5E7EB'};
   background: ${({ $on }) => $on ? '#F0FDF4' : '#fff'};
   margin-bottom: 10px;
+  transition: border-color 200ms ease, background 200ms ease;
   .check { color: ${({ $on }) => $on ? '#16A34A' : '#94A3B8'}; }
-  .ic { width: 32px; height: 22px; border-radius: 4px; background: #94A3B8; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
-  .body { flex: 1; }
-  .t { font-weight: 700; font-size: 14px; }
+  .ic { width: 32px; height: 22px; border-radius: 4px; background: #94A3B8; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex: none; }
+  .body { flex: 1; min-width: 0; }
+  .t { font-weight: 700; font-size: 14px; word-break: break-word; }
   .s { font-size: 12px; color: #6B7280; margin-top: 2px; }
-  button.del { background: none; border: none; cursor: pointer; color: #DC2626; }
+  button.del { background: none; border: none; cursor: pointer; color: #DC2626; transition: transform 160ms ease; }
+  button.del:hover { transform: scale(1.1); }
+  @media (max-width: 540px) {
+    padding: 12px;
+    .t { font-size: 13px; }
+  }
 `
 const AddBtn = styled.button`
   width: 100%; padding: 14px;

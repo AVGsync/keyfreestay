@@ -96,6 +96,14 @@ const ReviewsHead = styled.div`
   h3 { font-size: 16px; font-weight: 800; }
   a { color: ${({ theme }) => theme.colors.primarySolid}; font-size: 13px; font-weight: 600; cursor: pointer; }
 `
+const BottomBar = styled.div`
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 16px; padding: 0 4px;
+  @media (max-width: 540px) {
+    flex-direction: column; align-items: stretch;
+    a { width: 100%; }
+  }
+`
 const ReviewRow = styled.div`
   display: grid; grid-template-columns: 32px 1fr; gap: 12px;
   padding: 14px 0;
@@ -244,13 +252,13 @@ export default function PropertyPage() {
           ))}
         </Card>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 4px' }}>
+        <BottomBar>
           <div>
             <div style={{ fontSize: 22, fontWeight: 800 }}>{formatPrice(item.price_per_night || 0)} ₽<span style={{ fontSize: 14, fontWeight: 500, color: '#6B7280' }}> / ночь</span></div>
             <div style={{ fontSize: 13, color: '#6B7280' }}>До {item.max_guests || '—'} гостей</div>
           </div>
           <PrimaryButton as={Link} to={`/app/p/${item.id}/book`}>Забронировать</PrimaryButton>
-        </div>
+        </BottomBar>
       </PageInner>
     </PageBg>
   )

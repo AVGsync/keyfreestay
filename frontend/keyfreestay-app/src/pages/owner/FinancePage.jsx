@@ -97,7 +97,7 @@ export default function FinancePage() {
           </GradientTabs>
         </Card>
 
-        <Stats>
+        <Stats className="reveal">
           <StatBox><div className="ic" style={{ color: '#16A34A' }}>📈</div><div className="v">{formatPrice(gross)} ₽</div><div className="l">Общий доход</div></StatBox>
           <StatBox><div className="ic" style={{ color: '#F97316' }}>$</div><div className="v">{formatPrice(fee)} ₽</div><div className="l">Комиссия платформы</div></StatBox>
           <StatBox $color="#16A34A"><div className="ic" style={{ color: '#16A34A' }}>$</div><div className="v" style={{ color: '#16A34A' }}>{formatPrice(net)} ₽</div><div className="l">Чистый доход</div></StatBox>
