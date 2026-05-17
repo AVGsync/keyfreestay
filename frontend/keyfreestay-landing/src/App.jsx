@@ -198,7 +198,22 @@ const PhoneCard = styled.div`
     object-fit: cover;
     border-radius: 36px;
     pointer-events: none;
+    z-index: 1;
     ${media.mobile} { border-radius: 26px; }
+  }
+  &::after {
+    content: '';
+    position: absolute;
+    top: 2.3%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 42%;
+    height: 4%;
+    background: #000000;
+    border-radius: 0 0 18px 18px;
+    z-index: 2;
+    pointer-events: none;
+    ${media.mobile} { border-radius: 0 0 12px 12px; }
   }
 `
 const ArrowBtn = styled.button`
